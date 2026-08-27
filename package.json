@@ -1,0 +1,28 @@
+{
+  "name": "ocean-digital-twin-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Interactive 3D Ocean Digital Twin - SIH 2026 PS26067 - INCOIS",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext ts,tsx"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.168.0",
+    "@types/three": "^0.168.0",
+    "plotly.js-dist-min": "^2.35.2",
+    "react-plotly.js": "^2.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.2"
+  }
+}
