@@ -6,6 +6,7 @@ interface TopBarProps {
   healthError: boolean
   argoMeta: ArgoMetadata | null
   scene: SceneState
+  onToggleAI?: () => void
 }
 
 const VARIABLE_LABELS: Record<string, string> = {
@@ -14,7 +15,7 @@ const VARIABLE_LABELS: Record<string, string> = {
   current_speed: 'Currents',
 }
 
-export default function TopBar({ health, healthError, argoMeta, scene }: TopBarProps) {
+export default function TopBar({ health, healthError, argoMeta, scene, onToggleAI }: TopBarProps) {
   const argoReady = health?.argo_ready
   const hycomStub = health?.hycom_stub ?? true
 
@@ -75,6 +76,30 @@ export default function TopBar({ health, healthError, argoMeta, scene }: TopBarP
 
       <div className="topbar__spacer" />
 
+      {/* AI Assistant Button */}
+      {onToggleAI && (
+        <button
+          onClick={onToggleAI}
+          style={{
+            backgroundColor: '#0284c7',
+            color: '#fff',
+            border: '1px solid rgba(56, 189, 248, 0.4)',
+            borderRadius: '8px',
+            padding: '6px 12px',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            marginRight: '16px',
+            boxShadow: '0 0 12px rgba(2, 132, 199, 0.4)'
+          }}
+        >
+          ✨ Ask GPT-6 Astra
+        </button>
+      )}
+
       {/* Platform info */}
       <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textAlign: 'right' }}>
         <div style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>Ministry of Earth Sciences</div>
@@ -83,6 +108,7 @@ export default function TopBar({ health, healthError, argoMeta, scene }: TopBarP
     </header>
   )
 }
+
 
 interface StatusIndicatorProps {
   label: string

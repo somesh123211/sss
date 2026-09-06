@@ -173,5 +173,45 @@ export const api = {
   async comparisonProfile(platformNumber: number, cycleNumber: number, variable = 'temperature'): Promise<ComparisonData> {
     return apiFetch<ComparisonData>('/comparison/profile', { platform_number: platformNumber, cycle_number: cycleNumber, variable })
   },
+
+  async aiStatus(): Promise<{ status: string; model: string; api_key_set: boolean }> {
+    return apiFetch('/ai/status')
+  },
+
+  async aiChat(messages: Array<{ role: string; content: string }>, context?: string): Promise<{ status: string; reply: string; model: string }> {
+    const res = await fetch(`${API_BASE}/ai/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, context }),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`AI Chat error: ${err}`)
+    }
+    return res.json()
+  },
+
+  async aiAnalyzeProfile(params: {
+    float_id: string
+    platform_type: string
+    lat: number
+    lon: number
+    date: string
+    temp_profile: Array<{ depth: number; temp: number }>
+    sal_profile?: Array<{ depth: number; sal: number }>
+    user_query?: string
+  }): Promise<{ status: string; analysis: string; model: string }> {
+    const res = await fetch(`${API_BASE}/ai/analyze-profile`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      throw new Error(`AI Analysis error: ${err}`)
+    }
+    return res.json()
+  },
 }
+
 

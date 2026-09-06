@@ -8,6 +8,7 @@ import LeftPanel from './components/LeftPanel'
 import RightPanel from './components/RightPanel'
 import BottomBar from './components/BottomBar'
 import OceanScene from './components/OceanScene'
+import AIChatModal from './components/AIChatModal'
 
 // Default scene state
 const DEFAULT_SCENE: SceneState = {
@@ -25,6 +26,9 @@ export default function App() {
   // ── Backend health ──────────────────────────────────────────────
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [healthError, setHealthError] = useState(false)
+
+  // ── AI Assistant Drawer ─────────────────────────────────────────
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false)
 
   // ── Dataset metadata ────────────────────────────────────────────
   const [argoMeta, setArgoMeta] = useState<ArgoMetadata | null>(null)
@@ -124,6 +128,7 @@ export default function App() {
         healthError={healthError}
         argoMeta={argoMeta}
         scene={scene}
+        onToggleAI={() => setIsAIChatOpen(!isAIChatOpen)}
       />
       <LeftPanel
         scene={scene}
@@ -157,6 +162,14 @@ export default function App() {
         argoMeta={argoMeta}
         currentDateStr={currentDateStr}
       />
+
+      {/* GPT-6 Astra Chat Drawer */}
+      <AIChatModal
+        isOpen={isAIChatOpen}
+        onClose={() => setIsAIChatOpen(false)}
+        selectedFloat={selectedFloat}
+      />
     </div>
   )
 }
+
