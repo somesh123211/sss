@@ -8,6 +8,8 @@ import LeftPanel from './components/LeftPanel'
 import RightPanel from './components/RightPanel'
 import BottomBar from './components/BottomBar'
 import OceanScene from './components/OceanScene'
+import OceanWorld3D from './components/OceanWorld3D'
+import OceanMapView from './components/OceanMapView'
 import AIChatModal from './components/AIChatModal'
 
 // Default scene state
@@ -18,6 +20,8 @@ const DEFAULT_SCENE: SceneState = {
   show_argo: true,
   show_currents: false,
   show_model: false,
+  show_glider: true,
+  show_bathymetry: true,
   vertical_exaggeration: 5,
   opacity: 0.85,
 }
@@ -34,6 +38,18 @@ export default function App() {
   const [argoMeta, setArgoMeta] = useState<ArgoMetadata | null>(null)
   const [argoFloats, setArgoFloats] = useState<ArgoFloat[]>([])
   const [floatsLoaded, setFloatsLoaded] = useState(false)
+
+  // ── View mode: '3d' = 3D Ocean (OceanCubeScene), 'map' = 2D Map, 'globe' = Globe ──
+  const [viewMode, setViewMode] = useState<'3d' | 'map' | 'globe'>('map')
+
+  // ── Selected ocean region (drives OceanCubeScene data fetch) ────────────
+  const [region, setRegion] = useState({ lat_min: 0, lat_max: 30, lon_min: 55, lon_max: 100 })
+
+  // Switch to cube view for the selected region
+  const handleRegionSelect = useCallback((bbox: { lat_min: number; lat_max: number; lon_min: number; lon_max: number }) => {
+    setRegion(bbox)
+    setViewMode('3d')
+  }, [])
 
   // ── Scene state ─────────────────────────────────────────────────
   const [scene, setScene] = useState<SceneState>(DEFAULT_SCENE)
@@ -137,16 +153,62 @@ export default function App() {
         selectedBBox={selectedBBox}
         onManualBBox={setSelectedBBox}
       />
-      <main className="main-scene">
-        <OceanScene
-          scene={scene}
-          floats={argoFloats}
-          filteredFloats={filteredFloats}
-          onFloatSelect={handleFloatSelect}
-          selectedFloat={selectedFloat}
-          onBBoxSelect={setSelectedBBox}
-          selectedBBox={selectedBBox}
-        />
+      <main className="main-scene" style={{ position: 'relative' }}>
+        <div style={{
+          position: 'absolute', top: 56, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 30, display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden',
+          border: '1px solid rgba(0,212,255,0.4)', boxShadow: '0 2px 16px rgba(0,0,0,0.5)',
+        }}>
+          {(['3d', 'map', 'globe'] as const).map(mode => (
+            <button
+              key={mode}
+              id={`view-mode-${mode}`}
+              onClick={() => setViewMode(mode)}
+              style={{
+                padding: '7px 20px',
+                background: viewMode === mode ? 'rgba(0,212,255,0.22)' : 'rgba(6,12,26,0.92)',
+                border: 'none',
+                color: viewMode === mode ? '#00d4ff' : '#8ba7bb',
+                fontSize: 11, fontFamily: 'Inter, sans-serif', fontWeight: 700,
+                cursor: 'pointer', letterSpacing: '0.8px', transition: 'all 0.2s',
+              }}
+            >
+              {mode === '3d' ? '🌊 3D OCEAN' : mode === 'map' ? '🗺️ MAP VIEW' : '🌍 GLOBE VIEW'}
+            </button>
+          ))}
+        </div>
+
+        {viewMode === '3d' ? (
+          <OceanWorld3D
+            scene={scene}
+            floats={argoFloats}
+            filteredFloats={filteredFloats}
+            onFloatSelect={handleFloatSelect}
+            selectedFloat={selectedFloat}
+            region={region}
+            onRegionSelect={handleRegionSelect}
+          />
+        ) : viewMode === 'map' ? (
+          <OceanMapView
+            scene={scene}
+            floats={argoFloats}
+            filteredFloats={filteredFloats}
+            onFloatSelect={handleFloatSelect}
+            selectedFloat={selectedFloat}
+            onRegionSelect={handleRegionSelect}
+          />
+        ) : (
+          <OceanScene
+            scene={scene}
+            floats={argoFloats}
+            filteredFloats={filteredFloats}
+            onFloatSelect={handleFloatSelect}
+            selectedFloat={selectedFloat}
+            onBBoxSelect={setSelectedBBox}
+            selectedBBox={selectedBBox}
+            onRegionSelect={handleRegionSelect}
+          />
+        )}
       </main>
       <RightPanel
         selectedFloat={selectedFloat}

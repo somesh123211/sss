@@ -11,6 +11,8 @@ export interface HealthStatus {
   argo_ready: boolean
   hycom_ready: boolean
   hycom_stub: boolean
+  glider_ready?: boolean
+  gebco_ready?: boolean
   components: Record<string, string>
 }
 
@@ -162,12 +164,12 @@ export const api = {
     return apiFetch('/model/metadata')
   },
 
-  async modelSurface(variable = 'temperature'): Promise<HYCOMModelSurface> {
-    return apiFetch<HYCOMModelSurface>('/model/surface', { variable })
+  async modelSurface(variable = 'temperature', time_index = 0): Promise<HYCOMModelSurface> {
+    return apiFetch<HYCOMModelSurface>('/model/surface', { variable, time_index })
   },
 
-  async modelDepthSlice(variable = 'temperature', depth_m = 0): Promise<HYCOMModelSurface> {
-    return apiFetch<HYCOMModelSurface>('/model/depth-slice', { variable, depth_m })
+  async modelDepthSlice(variable = 'temperature', depth_m = 0, time_index = 0): Promise<HYCOMModelSurface> {
+    return apiFetch<HYCOMModelSurface>('/model/depth-slice', { variable, depth_m, time_index })
   },
 
   async comparisonProfile(platformNumber: number, cycleNumber: number, variable = 'temperature'): Promise<ComparisonData> {
@@ -212,6 +214,65 @@ export const api = {
     }
     return res.json()
   },
+
+  async gliderTrajectory(missionId = 'INCOIS-GLIDER-BOB-01'): Promise<{
+    mission_id: string
+    platform_code: string
+    wmo_code: string
+    title: string
+    total_points: number
+    depth_levels_m: number[]
+    waypoints: Array<{
+      point_id: number
+      lat: number
+      lon: number
+      time: string
+      temp_surface: number | null
+      sal_surface: number | null
+      chla_surface: number | null
+    }>
+  }> {
+    return apiFetch(`/glider/trajectory/${missionId}`)
+  },
+
+  async gliderProfile(missionId: string, pointId: number): Promise<{
+    mission_id: string
+    point_id: number
+    lat: number
+    lon: number
+    time: string
+    depth_m: number[]
+    temp: (number | null)[]
+    sal: (number | null)[]
+    chlorophyll: (number | null)[]
+  }> {
+    return apiFetch(`/glider/profile/${missionId}/${pointId}`)
+  },
+
+  async gebcoGrid(): Promise<{
+    lat: number[]
+    lon: number[]
+    elevation: number[][]
+    vmin: number
+    vmax: number
+    shape: number[]
+  }> {
+    return apiFetch('/bathymetry/grid')
+  },
+
+  async gebcoDepth(lat: number, lon: number): Promise<{
+    requested_lat: number
+    requested_lon: number
+    actual_lat: number
+    actual_lon: number
+    elevation_m: number
+    ocean_depth_m: number
+    is_land: boolean
+  }> {
+    return apiFetch('/bathymetry/depth', { lat, lon })
+  },
 }
+
+
 
 

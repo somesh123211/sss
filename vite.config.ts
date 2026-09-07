@@ -15,4 +15,14 @@ export default defineConfig({
   build: {
     sourcemap: true,
   },
+  optimizeDeps: {
+    include: [
+      'deck.gl',
+      '@deck.gl/react',
+      '@deck.gl/layers',
+      '@deck.gl/aggregation-layers',
+      '@deck.gl/geo-layers',
+      // react-map-gl is subpath-only in v8 — don't include root here
+    ],
+  },
 })

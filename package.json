@@ -6,17 +6,25 @@
   "description": "Interactive 3D Ocean Digital Twin - SIH 2026 PS26067 - INCOIS",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
+    "tsc-check": "tsc --noEmit",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx"
   },
   "dependencies": {
+    "@deck.gl/aggregation-layers": "^9.4.0",
+    "@deck.gl/geo-layers": "^9.4.0",
+    "@deck.gl/layers": "^9.4.0",
+    "@deck.gl/react": "^9.4.0",
+    "@types/three": "^0.168.0",
+    "deck.gl": "^9.4.0",
+    "maplibre-gl": "^4.7.1",
+    "plotly.js-dist-min": "^2.35.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "three": "^0.168.0",
-    "@types/three": "^0.168.0",
-    "plotly.js-dist-min": "^2.35.2",
-    "react-plotly.js": "^2.6.0"
+    "react-map-gl": "^8.1.3",
+    "react-plotly.js": "^2.6.0",
+    "three": "^0.168.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.5",

@@ -50,6 +50,22 @@ export default function LeftPanel({ scene, onSceneChange, argoMeta, selectedBBox
               <span>Current Vectors</span>
               <div className="toggle-dot" />
             </button>
+            <button
+              id="toggle-glider"
+              className={`toggle-btn ${scene.show_glider ? 'toggle-btn--active' : ''}`}
+              onClick={() => onSceneChange({ show_glider: !scene.show_glider })}
+            >
+              <span>IFREMER Glider</span>
+              <div className="toggle-dot" />
+            </button>
+            <button
+              id="toggle-bathymetry"
+              className={`toggle-btn ${scene.show_bathymetry ? 'toggle-btn--active' : ''}`}
+              onClick={() => onSceneChange({ show_bathymetry: !scene.show_bathymetry })}
+            >
+              <span>GEBCO Seafloor</span>
+              <div className="toggle-dot" />
+            </button>
           </div>
         </div>
       </div>
@@ -117,7 +133,7 @@ export default function LeftPanel({ scene, onSceneChange, argoMeta, selectedBBox
               }}>{scene.depth_m}m ◀</div>
             </div>
             <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 4 }}>
-              HYCOM renders 3D slice at selected depth
+              IGORA renders the 3D slice at selected depth
             </div>
           </div>
         </div>

@@ -52,14 +52,30 @@ export default function TopBar({ health, healthError, argoMeta, scene, onToggleA
           status={argoReady ? 'ok' : 'warn'}
         />
 
-        {/* HYCOM */}
+        {/* HYCOM / IGORA */}
         <StatusIndicator
-          label="INCOIS HYCOM"
-          value={hycomStub ? 'NetCDF Required' : 'Ready'}
+          label="INCOIS IGORA"
+          value={hycomStub ? 'Not Loaded' : 'Ready (0–2000m)'}
           status={hycomStub ? 'stub' : 'ok'}
         />
 
+        {/* Glider */}
+        <StatusIndicator
+          label="INCOIS GLIDER"
+          value={health?.glider_ready ? 'Ready (Bay of Bengal)' : 'Not Ready'}
+          status={health?.glider_ready ? 'ok' : 'warn'}
+        />
+
+        {/* GEBCO Bathymetry */}
+        <StatusIndicator
+          label="GEBCO BATHYMETRY"
+          value={health?.gebco_ready ? 'Ready (regional grid)' : 'Not Ready'}
+          status={health?.gebco_ready ? 'ok' : 'warn'}
+        />
+
         <div className="topbar__divider" />
+
+
 
         {/* Current view state */}
         <StatusIndicator

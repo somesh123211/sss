@@ -23,6 +23,8 @@ export interface SceneState {
   show_argo: boolean
   show_currents: boolean
   show_model: boolean
+  show_glider: boolean
+  show_bathymetry: boolean
   vertical_exaggeration: number
   opacity: number
 }
