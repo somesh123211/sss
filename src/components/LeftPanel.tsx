@@ -1,12 +1,16 @@
-import { useState } from 'react'
-import { SceneState, OceanVariable } from '../types'
+import React, { useState } from 'react'
+import { OceanVariable, ModelSourceId } from '../cesium/types'
 import { ArgoMetadata } from '../services/api'
+import { useCesium } from '../cesium/CesiumContext'
 
-interface BBox { lat_min: number; lat_max: number; lon_min: number; lon_max: number }
+interface BBox {
+  lat_min: number
+  lat_max: number
+  lon_min: number
+  lon_max: number
+}
 
 interface LeftPanelProps {
-  scene: SceneState
-  onSceneChange: (partial: Partial<SceneState>) => void
   argoMeta: ArgoMetadata | null
   selectedBBox?: BBox | null
   onManualBBox?: (bbox: BBox) => void
@@ -14,56 +18,110 @@ interface LeftPanelProps {
 
 const DEPTHS = [0, 10, 25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000]
 
-export default function LeftPanel({ scene, onSceneChange, argoMeta, selectedBBox, onManualBBox }: LeftPanelProps) {
+export default function LeftPanel({ argoMeta, selectedBBox, onManualBBox }: LeftPanelProps) {
+  const { state, setVariable, setDepth, setLayerVisibility, updateState } = useCesium()
+
   const [manLat0, setManLat0] = useState('')
   const [manLat1, setManLat1] = useState('')
   const [manLon0, setManLon0] = useState('')
   const [manLon1, setManLon1] = useState('')
+
   return (
     <aside className="left-panel">
-      {/* Data Source */}
+      {/* Model Selection */}
       <div className="panel-section">
-        <div className="panel-section__title">Data Sources</div>
+        <div className="panel-section__title">Numerical Ocean Model</div>
+        <div className="panel-section__content">
+          <div className="control-group">
+            <select
+              id="model-source-select"
+              className="control-select"
+              value={state.model_id}
+              onChange={e => updateState({ model_id: e.target.value as ModelSourceId })}
+            >
+              <option value="igora">INCOIS IGORA (Active Model)</option>
+              <option value="hycom">INCOIS RSMC HYCOM (NetCDF)</option>
+              <option value="copernicus">Copernicus GLORYS12V1 (Reanalysis)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Layer Toggles */}
+      <div className="panel-section">
+        <div className="panel-section__title">Visualization Layers</div>
         <div className="panel-section__content">
           <div className="toggle-group">
             <button
               id="toggle-argo"
-              className={`toggle-btn ${scene.show_argo ? 'toggle-btn--active' : ''}`}
-              onClick={() => onSceneChange({ show_argo: !scene.show_argo })}
+              className={`toggle-btn ${state.layers.argo ? 'toggle-btn--active' : ''}`}
+              onClick={() => setLayerVisibility('argo', !state.layers.argo)}
             >
               <span>INCOIS Argo Floats</span>
               <div className="toggle-dot" />
             </button>
             <button
-              id="toggle-model"
-              className={`toggle-btn ${scene.show_model ? 'toggle-btn--active' : ''}`}
-              onClick={() => onSceneChange({ show_model: !scene.show_model })}
+              id="toggle-model-slice"
+              className={`toggle-btn ${state.layers.model_slice ? 'toggle-btn--active' : ''}`}
+              onClick={() => setLayerVisibility('model_slice', !state.layers.model_slice)}
             >
-              <span>HYCOM Model</span>
+              <span>Model Depth Field</span>
               <div className="toggle-dot" />
             </button>
             <button
               id="toggle-currents"
-              className={`toggle-btn ${scene.show_currents ? 'toggle-btn--active' : ''}`}
-              onClick={() => onSceneChange({ show_currents: !scene.show_currents })}
+              className={`toggle-btn ${state.layers.current_vectors ? 'toggle-btn--active' : ''}`}
+              onClick={() => setLayerVisibility('current_vectors', !state.layers.current_vectors)}
             >
-              <span>Current Vectors</span>
+              <span>Current Vectors (u,v)</span>
+              <div className="toggle-dot" />
+            </button>
+            <button
+              id="toggle-particles"
+              className={`toggle-btn ${state.layers.current_particles ? 'toggle-btn--active' : ''}`}
+              onClick={() => setLayerVisibility('current_particles', !state.layers.current_particles)}
+            >
+              <span>Current Flow Particles</span>
               <div className="toggle-dot" />
             </button>
             <button
               id="toggle-glider"
-              className={`toggle-btn ${scene.show_glider ? 'toggle-btn--active' : ''}`}
-              onClick={() => onSceneChange({ show_glider: !scene.show_glider })}
+              className={`toggle-btn ${state.layers.glider ? 'toggle-btn--active' : ''}`}
+              onClick={() => setLayerVisibility('glider', !state.layers.glider)}
             >
-              <span>IFREMER Glider</span>
+              <span>IFREMER OceanGliders</span>
               <div className="toggle-dot" />
             </button>
             <button
               id="toggle-bathymetry"
-              className={`toggle-btn ${scene.show_bathymetry ? 'toggle-btn--active' : ''}`}
-              onClick={() => onSceneChange({ show_bathymetry: !scene.show_bathymetry })}
+              className={`toggle-btn ${state.layers.bathymetry ? 'toggle-btn--active' : ''}`}
+              onClick={() => setLayerVisibility('bathymetry', !state.layers.bathymetry)}
             >
-              <span>GEBCO Seafloor</span>
+              <span>GEBCO Bathymetry Grid</span>
+              <div className="toggle-dot" />
+            </button>
+            <button
+              id="toggle-error-map"
+              className={`toggle-btn ${state.layers.model_error ? 'toggle-btn--active' : ''}`}
+              onClick={() => setLayerVisibility('model_error', !state.layers.model_error)}
+            >
+              <span>Model Error (Obs Bias)</span>
+              <div className="toggle-dot" />
+            </button>
+            <button
+              id="toggle-density"
+              className={`toggle-btn ${state.layers.observation_density ? 'toggle-btn--active' : ''}`}
+              onClick={() => setLayerVisibility('observation_density', !state.layers.observation_density)}
+            >
+              <span>Observation Density</span>
+              <div className="toggle-dot" />
+            </button>
+            <button
+              id="toggle-boundaries"
+              className={`toggle-btn ${state.layers.boundaries ? 'toggle-btn--active' : ''}`}
+              onClick={() => setLayerVisibility('boundaries', !state.layers.boundaries)}
+            >
+              <span>Regional Boundaries</span>
               <div className="toggle-dot" />
             </button>
           </div>
@@ -72,76 +130,109 @@ export default function LeftPanel({ scene, onSceneChange, argoMeta, selectedBBox
 
       {/* Variable Selection */}
       <div className="panel-section">
-        <div className="panel-section__title">Variable</div>
+        <div className="panel-section__title">Ocean Variable</div>
         <div className="panel-section__content">
           <div className="control-group">
             <select
               id="variable-select"
               className="control-select"
-              value={scene.variable}
-              onChange={e => onSceneChange({ variable: e.target.value as OceanVariable })}
+              value={state.variable}
+              onChange={e => setVariable(e.target.value as OceanVariable)}
             >
               <option value="temperature">Temperature (°C)</option>
               <option value="salinity">Salinity (PSU)</option>
               <option value="current_speed">Current Speed (m/s)</option>
+              <option value="ssh">Sea Surface Height (m)</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* Depth */}
+      {/* Depth Slider */}
       <div className="panel-section">
-        <div className="panel-section__title">Depth</div>
+        <div className="panel-section__title">Depth Level</div>
         <div className="panel-section__content">
           <div className="control-group">
-            <div className="control-label">Pressure / Depth Level</div>
+            <div className="control-label">Target Depth (m)</div>
             <select
               id="depth-select"
               className="control-select"
-              value={scene.depth_m}
-              onChange={e => onSceneChange({ depth_m: Number(e.target.value) })}
+              value={state.depth_m}
+              onChange={e => setDepth(Number(e.target.value))}
             >
               {DEPTHS.map(d => (
                 <option key={d} value={d}>
-                  {d === 0 ? '0 m (Surface)' : `${d} m`}
+                  {d === 0 ? 'Surface (0 m)' : `${d} m`}
                 </option>
               ))}
             </select>
             <div className="control-value" style={{ color: '#00d4ff', fontWeight: 700, fontSize: 12 }}>
-              {scene.depth_m === 0 ? '🌊 Surface (0 dbar)' : `⬇ ${scene.depth_m} m depth`}
+              {state.depth_m === 0 ? '🌊 Surface (0m)' : `⬇ ${state.depth_m} m depth`}
             </div>
             {/* Visual depth bar */}
-            <div style={{ marginTop: 8, position: 'relative', height: 80, background: 'rgba(0,0,0,0.3)', borderRadius: 4, border: '1px solid rgba(0,212,255,0.2)', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(to bottom, rgba(0,180,220,0.5) 0%, rgba(0,80,160,0.7) 40%, rgba(0,30,80,0.9) 100%)' }} />
-              {/* Active depth marker */}
-              <div style={{
-                position: 'absolute',
-                left: 0, right: 0,
-                top: `${Math.min(95, (Math.log1p(scene.depth_m) / Math.log1p(2000)) * 100)}%`,
-                height: 2,
-                background: '#00ffff',
-                boxShadow: '0 0 6px #00ffff',
-              }} />
-              <div style={{ position: 'absolute', top: 2, left: 4, fontSize: 8, color: 'rgba(255,255,255,0.7)' }}>0 m Surface</div>
-              <div style={{ position: 'absolute', top: '40%', left: 4, fontSize: 8, color: 'rgba(255,255,255,0.5)' }}>500 m</div>
-              <div style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 8, color: 'rgba(255,255,255,0.4)' }}>2000 m Deep</div>
-              <div style={{
-                position: 'absolute',
-                right: 4,
-                top: `calc(${Math.min(91, (Math.log1p(scene.depth_m) / Math.log1p(2000)) * 100)}% - 1px)`,
-                fontSize: 9, color: '#00ffff', fontWeight: 700, fontFamily: 'monospace'
-              }}>{scene.depth_m}m ◀</div>
-            </div>
-            <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 4 }}>
-              IGORA renders the 3D slice at selected depth
+            <div
+              style={{
+                marginTop: 8,
+                position: 'relative',
+                height: 70,
+                background: 'rgba(0,0,0,0.3)',
+                borderRadius: 4,
+                border: '1px solid rgba(0,212,255,0.2)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background:
+                    'linear-gradient(to bottom, rgba(0,180,220,0.5) 0%, rgba(0,80,160,0.7) 40%, rgba(0,30,80,0.9) 100%)',
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: `${Math.min(95, (Math.log1p(state.depth_m) / Math.log1p(2000)) * 100)}%`,
+                  height: 2,
+                  background: '#00ffff',
+                  boxShadow: '0 0 6px #00ffff',
+                }}
+              />
+              <div style={{ position: 'absolute', top: 2, left: 4, fontSize: 8, color: 'rgba(255,255,255,0.7)' }}>
+                0 m Surface
+              </div>
+              <div style={{ position: 'absolute', top: '40%', left: 4, fontSize: 8, color: 'rgba(255,255,255,0.5)' }}>
+                500 m
+              </div>
+              <div style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 8, color: 'rgba(255,255,255,0.4)' }}>
+                2000 m Deep
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 4,
+                  top: `calc(${Math.min(91, (Math.log1p(state.depth_m) / Math.log1p(2000)) * 100)}% - 1px)`,
+                  fontSize: 9,
+                  color: '#00ffff',
+                  fontWeight: 700,
+                  fontFamily: 'monospace',
+                }}
+              >
+                {state.depth_m}m ◀
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Vertical Exaggeration */}
+      {/* 3D Settings */}
       <div className="panel-section">
-        <div className="panel-section__title">3D Settings</div>
+        <div className="panel-section__title">Geospatial 3D Controls</div>
         <div className="panel-section__content">
           <div className="control-group">
             <div className="control-label">Vertical Exaggeration</div>
@@ -149,25 +240,18 @@ export default function LeftPanel({ scene, onSceneChange, argoMeta, selectedBBox
               id="vert-exag-slider"
               type="range"
               className="control-slider"
-              min={1} max={20} step={1}
-              value={scene.vertical_exaggeration}
-              style={{ '--slider-pct': `${((scene.vertical_exaggeration - 1) / 19) * 100}%` } as React.CSSProperties}
-              onChange={e => onSceneChange({ vertical_exaggeration: Number(e.target.value) })}
+              min={1}
+              max={10}
+              step={1}
+              value={state.vertical_exaggeration}
+              style={
+                {
+                  '--slider-pct': `${((state.vertical_exaggeration - 1) / 9) * 100}%`,
+                } as React.CSSProperties
+              }
+              onChange={e => updateState({ vertical_exaggeration: Number(e.target.value) })}
             />
-            <div className="control-value">{scene.vertical_exaggeration}×</div>
-          </div>
-          <div className="control-group">
-            <div className="control-label">Marker Opacity</div>
-            <input
-              id="opacity-slider"
-              type="range"
-              className="control-slider"
-              min={0.1} max={1.0} step={0.05}
-              value={scene.opacity}
-              style={{ '--slider-pct': `${scene.opacity * 100}%` } as React.CSSProperties}
-              onChange={e => onSceneChange({ opacity: Number(e.target.value) })}
-            />
-            <div className="control-value">{Math.round(scene.opacity * 100)}%</div>
+            <div className="control-value">{state.vertical_exaggeration}× (Cesium WGS84)</div>
           </div>
         </div>
       </div>
@@ -175,7 +259,7 @@ export default function LeftPanel({ scene, onSceneChange, argoMeta, selectedBBox
       {/* Dataset Info */}
       {argoMeta && (
         <div className="panel-section">
-          <div className="panel-section__title">Argo Dataset</div>
+          <div className="panel-section__title">Argo Dataset Metadata</div>
           <div className="panel-section__content">
             <MetaRow label="Platforms" value={String(argoMeta.unique_platforms)} />
             <MetaRow label="Profiles" value={argoMeta.total_profiles.toLocaleString()} />
@@ -192,32 +276,19 @@ export default function LeftPanel({ scene, onSceneChange, argoMeta, selectedBBox
               value={`${argoMeta.geographic_coverage.lat_min.toFixed(1)}–${argoMeta.geographic_coverage.lat_max.toFixed(1)}°N`}
             />
             <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.5 }}>
-              Source: INCOIS ERDDAP<br/>Indian_ARGO_Floats
+              Source: INCOIS ERDDAP
+              <br />
+              Indian_ARGO_Floats
             </div>
           </div>
         </div>
       )}
 
-      {/* Selected Region */}
+      {/* Manual Coordinates Input */}
       <div className="panel-section">
-        <div className="panel-section__title">Selected Region</div>
+        <div className="panel-section__title">Spatial Bounding Box</div>
         <div className="panel-section__content">
-          {selectedBBox ? (
-            <div style={{ fontSize: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <div style={{ padding: '6px 8px', background: 'rgba(0,212,255,0.08)', border: '1px solid rgba(0,212,255,0.3)', borderRadius: 5 }}>
-                <MetaRow label="Lat" value={`${selectedBBox.lat_min.toFixed(2)}° – ${selectedBBox.lat_max.toFixed(2)}°N`} />
-                <MetaRow label="Lon" value={`${selectedBBox.lon_min.toFixed(2)}° – ${selectedBBox.lon_max.toFixed(2)}°E`} />
-                <MetaRow label="Δ Lat" value={`${(selectedBBox.lat_max - selectedBBox.lat_min).toFixed(2)}°`} />
-                <MetaRow label="Δ Lon" value={`${(selectedBBox.lon_max - selectedBBox.lon_min).toFixed(2)}°`} />
-              </div>
-            </div>
-          ) : (
-            <div style={{ fontSize: 10, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-              Use <strong style={{ color: 'var(--color-accent-cyan)' }}>⬚ Select Region</strong> button in the 3D scene to draw a lat/lon bounding box.
-            </div>
-          )}
-          {/* Manual coordinate input */}
-          <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
             {[
               { label: 'Lat Min', val: manLat0, set: setManLat0, ph: '0' },
               { label: 'Lat Max', val: manLat1, set: setManLat1, ph: '25' },
@@ -239,11 +310,17 @@ export default function LeftPanel({ scene, onSceneChange, argoMeta, selectedBBox
           </div>
           <button
             style={{
-              width: '100%', marginTop: 6,
-              padding: '5px 0', borderRadius: 4,
-              background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.3)',
-              color: 'var(--color-accent-cyan)', fontSize: 11, fontFamily: 'var(--font-sans)',
-              cursor: 'pointer', fontWeight: 600,
+              width: '100%',
+              marginTop: 6,
+              padding: '5px 0',
+              borderRadius: 4,
+              background: 'rgba(0,212,255,0.1)',
+              border: '1px solid rgba(0,212,255,0.3)',
+              color: 'var(--color-accent-cyan)',
+              fontSize: 11,
+              fontFamily: 'var(--font-sans)',
+              cursor: 'pointer',
+              fontWeight: 600,
             }}
             onClick={() => {
               const bbox = {
@@ -255,30 +332,8 @@ export default function LeftPanel({ scene, onSceneChange, argoMeta, selectedBBox
               onManualBBox?.(bbox)
             }}
           >
-            Apply Coordinates
+            Apply Bounding Box
           </button>
-        </div>
-      </div>
-
-      {/* HYCOM Status — Live */}
-      <div className="panel-section">
-        <div className="panel-section__title">Model Status</div>
-        <div className="panel-section__content">
-          <div style={{
-            padding: '8px 10px',
-            background: 'rgba(0,212,255,0.06)',
-            border: '1px solid rgba(0,212,255,0.3)',
-            borderRadius: 6,
-            fontSize: 10,
-            color: '#00d4ff',
-            lineHeight: 1.7,
-          }}>
-            <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 11 }}>✓ INCOIS HYCOM MODEL ACTIVE</div>
-            <div style={{ color: '#8ba7bb' }}>Grid: 121 × 181 (0.25°)</div>
-            <div style={{ color: '#8ba7bb' }}>Depth Levels: 0 → 2000 m (14 layers)</div>
-            <div style={{ color: '#8ba7bb' }}>Coverage: 0°–30°N | 55°–100°E</div>
-            <div style={{ color: '#8ba7bb' }}>Variables: T, S, u, v, SSH</div>
-          </div>
         </div>
       </div>
     </aside>
