@@ -1,49 +1,75 @@
-import { useEffect, useState } from 'react'
-import { SceneState } from '../types'
+import React, { useEffect, useState } from 'react'
 import { ArgoMetadata } from '../services/api'
+import { useCesium } from '../cesium/CesiumContext'
 
 interface BottomBarProps {
-  scene: SceneState
-  onSceneChange: (partial: Partial<SceneState>) => void
   argoMeta: ArgoMetadata | null
-  currentDateStr?: string
 }
 
-const TEMP_COLORBAR = 'linear-gradient(to right, #313695, #4575b4, #74add1, #abd9e9, #e0f3f8, #ffffbf, #fee090, #fdae61, #f46d43, #d73027, #a50026)'
-const PSAL_COLORBAR = 'linear-gradient(to right, #00897b, #26c6da, #80deea, #e0f7fa, #fff9c4, #fff176, #ffd54f, #ff8f00)'
-const CURR_COLORBAR = 'linear-gradient(to right, #0d47a1, #1976d2, #42a5f5, #80d8ff, #a7ffeb, #64ffda, #1de9b6, #00bfa5)'
+const TEMP_COLORBAR =
+  'linear-gradient(to right, rgb(4,4,30), rgb(20,60,140), rgb(30,140,170), rgb(45,185,140), rgb(230,190,50), rgb(240,60,40))'
+const PSAL_COLORBAR =
+  'linear-gradient(to right, rgb(20,30,80), rgb(50,110,140), rgb(100,180,130), rgb(210,210,120), rgb(250,240,200))'
+const CURR_COLORBAR =
+  'linear-gradient(to right, rgb(10,20,50), rgb(0,160,220), rgb(50,230,140), rgb(250,210,40), rgb(255,50,20))'
+const BIAS_COLORBAR =
+  'linear-gradient(to right, rgb(20,90,230), rgb(120,180,250), rgb(240,245,250), rgb(250,160,120), rgb(230,40,30))'
 
-export default function BottomBar({ scene, onSceneChange, argoMeta, currentDateStr }: BottomBarProps) {
+export default function BottomBar({ argoMeta }: BottomBarProps) {
+  const { controllerRef, state, setTimeIndex } = useCesium()
   const [isPlaying, setIsPlaying] = useState(false)
 
   // Colorbar gradient selection
-  const colorbar = scene.variable === 'salinity' ? PSAL_COLORBAR :
-                   scene.variable === 'current_speed' ? CURR_COLORBAR : TEMP_COLORBAR
+  const colorbar = state.layers.model_error
+    ? BIAS_COLORBAR
+    : state.variable === 'salinity'
+    ? PSAL_COLORBAR
+    : state.variable === 'current_speed'
+    ? CURR_COLORBAR
+    : TEMP_COLORBAR
 
-  const varLabel = scene.variable === 'temperature' ? 'Temp (°C)' :
-                   scene.variable === 'salinity' ? 'Sal (PSU)' : 'Current (m/s)'
-  const varMin = scene.variable === 'temperature' ? '2°C' :
-                 scene.variable === 'salinity' ? '30' : '0.0'
-  const varMax = scene.variable === 'temperature' ? '32°C' :
-                 scene.variable === 'salinity' ? '38' : '1.5 m/s'
+  const varLabel = state.layers.model_error
+    ? 'Bias (°C / PSU)'
+    : state.variable === 'temperature'
+    ? 'Temp (°C)'
+    : state.variable === 'salinity'
+    ? 'Sal (PSU)'
+    : 'Current (m/s)'
+
+  const varMin = state.layers.model_error
+    ? '-2.0'
+    : state.variable === 'temperature'
+    ? '15°C'
+    : state.variable === 'salinity'
+    ? '32'
+    : '0.0'
+
+  const varMax = state.layers.model_error
+    ? '+2.0'
+    : state.variable === 'temperature'
+    ? '32°C'
+    : state.variable === 'salinity'
+    ? '37'
+    : '1.5 m/s'
 
   // Time-step animation loop
   useEffect(() => {
     if (!isPlaying) return
     const timer = setInterval(() => {
-      onSceneChange({
-        time_index: scene.time_index >= 100 ? 0 : scene.time_index + 1
-      })
+      setTimeIndex(state.time_index >= 100 ? 0 : state.time_index + 1)
     }, 350)
     return () => clearInterval(timer)
-  }, [isPlaying, scene.time_index, onSceneChange])
+  }, [isPlaying, state.time_index, setTimeIndex])
 
-  // Calculate current interpolated date
+  // Compute active date string
   const startDate = argoMeta ? new Date(argoMeta.time_range.start).getTime() : new Date('2018-01-01').getTime()
   const endDate = argoMeta ? new Date(argoMeta.time_range.end).getTime() : new Date('2025-04-01').getTime()
-  const currentTs = startDate + ((endDate - startDate) * (scene.time_index / 100))
-  const displayDate = currentDateStr || new Date(currentTs).toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'
+  const currentTs = startDate + (endDate - startDate) * (state.time_index / 100)
+  const displayDate = new Date(currentTs).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
   })
 
   return (
@@ -54,7 +80,10 @@ export default function BottomBar({ scene, onSceneChange, argoMeta, currentDateS
           id="timeline-prev"
           className="timeline-btn"
           title="Step backward"
-          onClick={() => onSceneChange({ time_index: Math.max(0, scene.time_index - 1) })}
+          onClick={() => {
+            controllerRef.current?.clock?.stepBackward(15)
+            setTimeIndex(Math.max(0, state.time_index - 1))
+          }}
         >
           ◀
         </button>
@@ -62,8 +91,14 @@ export default function BottomBar({ scene, onSceneChange, argoMeta, currentDateS
           id="timeline-play"
           className="timeline-btn"
           title={isPlaying ? 'Pause animation' : 'Play time-step animation'}
-          onClick={() => setIsPlaying(!isPlaying)}
-          style={{ background: isPlaying ? 'rgba(0,212,255,0.3)' : 'rgba(0,212,255,0.1)', color: '#00ffff' }}
+          onClick={() => {
+            setIsPlaying(!isPlaying)
+            controllerRef.current?.clock?.togglePlay()
+          }}
+          style={{
+            background: isPlaying ? 'rgba(0,212,255,0.3)' : 'rgba(0,212,255,0.1)',
+            color: '#00ffff',
+          }}
         >
           {isPlaying ? '❚❚' : '▶'}
         </button>
@@ -71,7 +106,10 @@ export default function BottomBar({ scene, onSceneChange, argoMeta, currentDateS
           id="timeline-next"
           className="timeline-btn"
           title="Step forward"
-          onClick={() => onSceneChange({ time_index: Math.min(100, scene.time_index + 1) })}
+          onClick={() => {
+            controllerRef.current?.clock?.stepForward(15)
+            setTimeIndex(Math.min(100, state.time_index + 1))
+          }}
         >
           ▶▶
         </button>
@@ -84,19 +122,21 @@ export default function BottomBar({ scene, onSceneChange, argoMeta, currentDateS
         </div>
 
         {/* Current Active Date Badge */}
-        <div style={{
-          background: 'rgba(0,212,255,0.2)',
-          border: '1px solid rgba(0,212,255,0.5)',
-          borderRadius: 4,
-          padding: '2px 8px',
-          fontSize: 11,
-          fontWeight: 700,
-          color: '#00ffff',
-          minWidth: 100,
-          textAlign: 'center',
-          fontFamily: 'monospace',
-          boxShadow: '0 0 10px rgba(0,212,255,0.3)',
-        }}>
+        <div
+          style={{
+            background: 'rgba(0,212,255,0.2)',
+            border: '1px solid rgba(0,212,255,0.5)',
+            borderRadius: 4,
+            padding: '2px 8px',
+            fontSize: 11,
+            fontWeight: 700,
+            color: '#00ffff',
+            minWidth: 100,
+            textAlign: 'center',
+            fontFamily: 'monospace',
+            boxShadow: '0 0 10px rgba(0,212,255,0.3)',
+          }}
+        >
           {displayDate}
         </div>
 
@@ -106,9 +146,13 @@ export default function BottomBar({ scene, onSceneChange, argoMeta, currentDateS
           className="timeline-slider"
           min={0}
           max={100}
-          value={scene.time_index}
-          style={{ '--timeline-pct': `${scene.time_index}%` } as React.CSSProperties}
-          onChange={e => onSceneChange({ time_index: Number(e.target.value) })}
+          value={state.time_index}
+          style={{ '--timeline-pct': `${state.time_index}%` } as React.CSSProperties}
+          onChange={e => {
+            const val = Number(e.target.value)
+            setTimeIndex(val)
+            controllerRef.current?.clock?.setTimeFraction(val / 100)
+          }}
         />
 
         <div className="timeline-time" style={{ textAlign: 'right', minWidth: 90, color: '#8ba7bb', fontSize: 10 }}>
@@ -120,18 +164,22 @@ export default function BottomBar({ scene, onSceneChange, argoMeta, currentDateS
       <div className="colorbar">
         <div className="colorbar__title">{varLabel}</div>
         <div className="colorbar__label">{varMin}</div>
-        <div
-          className="colorbar__gradient"
-          style={{ background: colorbar }}
-        />
+        <div className="colorbar__gradient" style={{ background: colorbar }} />
         <div className="colorbar__label">{varMax}</div>
       </div>
 
       {/* Dataset info */}
       <div className="dataset-info">
-        <div className="dataset-info__tag">INCOIS ARGO</div>
-        <div className="dataset-info__tag" style={{ color: '#00ffff', background: 'rgba(0,212,255,0.15)', borderColor: 'rgba(0,212,255,0.4)' }}>
-          HYCOM MODEL 3D
+        <div className="dataset-info__tag">CESIUM WGS84</div>
+        <div
+          className="dataset-info__tag"
+          style={{
+            color: '#00ffff',
+            background: 'rgba(0,212,255,0.15)',
+            borderColor: 'rgba(0,212,255,0.4)',
+          }}
+        >
+          INCOIS 3D TWIN
         </div>
       </div>
     </footer>
@@ -141,7 +189,10 @@ export default function BottomBar({ scene, onSceneChange, argoMeta, currentDateS
 function formatDate(isoString: string): string {
   try {
     return new Date(isoString).toLocaleDateString('en-IN', {
-      day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'UTC',
     })
   } catch {
     return isoString

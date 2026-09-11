@@ -1,32 +1,30 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, HealthStatus, ArgoMetadata, ArgoFloat, ArgoProfile } from './services/api'
-import { SceneState, SelectedFloat, OceanVariable } from './types'
+import { SelectedFloat, ViewMode } from './types'
 
-interface BBox { lat_min: number; lat_max: number; lon_min: number; lon_max: number }
 import TopBar from './components/TopBar'
 import LeftPanel from './components/LeftPanel'
 import RightPanel from './components/RightPanel'
 import BottomBar from './components/BottomBar'
-import OceanScene from './components/OceanScene'
+import AIChatModal from './components/AIChatModal'
 import OceanWorld3D from './components/OceanWorld3D'
 import OceanMapView from './components/OceanMapView'
-import AIChatModal from './components/AIChatModal'
+import OceanCubeScene from './components/OceanCubeScene'
+import { CesiumProvider, useCesium } from './cesium/CesiumContext'
+import { CesiumViewer } from './cesium/CesiumViewer'
+import { SceneState } from './types'
 
-// Default scene state
-const DEFAULT_SCENE: SceneState = {
-  variable: 'temperature',
-  depth_m: 0,
-  time_index: 0,
-  show_argo: true,
-  show_currents: false,
-  show_model: false,
-  show_glider: true,
-  show_bathymetry: true,
-  vertical_exaggeration: 5,
-  opacity: 0.85,
+interface BBox {
+  lat_min: number
+  lat_max: number
+  lon_min: number
+  lon_max: number
 }
 
-export default function App() {
+function MainApp() {
+  const { state, setDepth, setVariable, setTimeIndex } = useCesium()
+  const [viewMode, setViewMode] = useState<ViewMode>('ocean3d')
+
   // ── Backend health ──────────────────────────────────────────────
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [healthError, setHealthError] = useState(false)
@@ -39,23 +37,9 @@ export default function App() {
   const [argoFloats, setArgoFloats] = useState<ArgoFloat[]>([])
   const [floatsLoaded, setFloatsLoaded] = useState(false)
 
-  // ── View mode: '3d' = 3D Ocean (OceanCubeScene), 'map' = 2D Map, 'globe' = Globe ──
-  const [viewMode, setViewMode] = useState<'3d' | 'map' | 'globe'>('map')
-
-  // ── Selected ocean region (drives OceanCubeScene data fetch) ────────────
-  const [region, setRegion] = useState({ lat_min: 0, lat_max: 30, lon_min: 55, lon_max: 100 })
-
-  // Switch to cube view for the selected region
-  const handleRegionSelect = useCallback((bbox: { lat_min: number; lat_max: number; lon_min: number; lon_max: number }) => {
-    setRegion(bbox)
-    setViewMode('3d')
-  }, [])
-
-  // ── Scene state ─────────────────────────────────────────────────
-  const [scene, setScene] = useState<SceneState>(DEFAULT_SCENE)
-
   // ── Selected observation & comparison ───────────────────────────
   const [selectedFloat, setSelectedFloat] = useState<SelectedFloat | null>(null)
+  const [selectedGlider, setSelectedGlider] = useState<any>(null)
   const [selectedProfile, setSelectedProfile] = useState<ArgoProfile | null>(null)
   const [selectedComparison, setSelectedComparison] = useState<any>(null)
   const [profileLoading, setProfileLoading] = useState(false)
@@ -76,7 +60,7 @@ export default function App() {
       }
     }
     fetchHealth()
-    const interval = setInterval(fetchHealth, 15000) // refresh every 15s
+    const interval = setInterval(fetchHealth, 15000)
     return () => clearInterval(interval)
   }, [])
 
@@ -86,10 +70,10 @@ export default function App() {
     api.argoMetadata().then(setArgoMeta).catch(console.error)
   }, [health?.argo_ready])
 
-  // ── Fetch Argo float positions (initial full set) ─────────────────
+  // ── Fetch Argo float positions ────────────────────────────────────
   useEffect(() => {
     if (!health?.argo_ready || floatsLoaded) return
-    api.argoFloats({ max_profiles: 1000 })
+    api.argoFloats({ max_profiles: 2000 })
       .then(res => {
         setArgoFloats(res.floats)
         setFloatsLoaded(true)
@@ -105,9 +89,10 @@ export default function App() {
     setProfileError(null)
     setProfileLoading(true)
     try {
+      const currentVar = state.variable === 'salinity' ? 'salinity' : 'temperature'
       const [profile, comp] = await Promise.all([
         api.argoProfile(float.platform_number, float.cycle_number),
-        api.comparisonProfile(float.platform_number, float.cycle_number, 'temperature').catch(() => null),
+        api.comparisonProfile(float.platform_number, float.cycle_number, currentVar).catch(() => null),
       ])
       setSelectedProfile(profile)
       setSelectedComparison(comp)
@@ -116,26 +101,35 @@ export default function App() {
     } finally {
       setProfileLoading(false)
     }
-  }, [])
+  }, [state.variable])
 
-  // ── Scene state updaters ──────────────────────────────────────────
-  const updateScene = useCallback((partial: Partial<SceneState>) => {
-    setScene(prev => ({ ...prev, ...partial }))
-  }, [])
+  // Construct synced 3D Scene state for Three.js/Deck.gl
+  const sceneState: SceneState = {
+    variable:
+      state.variable === 'salinity'
+        ? 'salinity'
+        : state.variable === 'current_speed'
+        ? 'current_speed'
+        : 'temperature',
+    depth_m: state.depth_m,
+    time_index: state.time_index,
+    show_argo: state.layers.argo,
+    show_currents: state.layers.current_vectors || state.layers.current_particles,
+    show_model: state.layers.model_slice,
+    show_glider: state.layers.glider,
+    show_bathymetry: state.layers.bathymetry,
+    vertical_exaggeration: state.vertical_exaggeration,
+    opacity: state.volume_opacity,
+  }
 
-  // ── Compute current active date from timeline slider ─────────────
-  const startDate = argoMeta ? new Date(argoMeta.time_range.start).getTime() : new Date('2018-01-01').getTime()
-  const endDate = argoMeta ? new Date(argoMeta.time_range.end).getTime() : new Date('2025-04-01').getTime()
-  const currentTs = startDate + ((endDate - startDate) * (scene.time_index / 100))
-  const currentDateStr = new Date(currentTs).toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC'
-  })
-
-  // Filter floats up to current active date (or within current year window)
-  const filteredFloats = argoFloats.filter(f => {
-    const floatTime = new Date(f.time).getTime()
-    return floatTime <= currentTs
-  })
+  const handleSceneChange = useCallback((partial: Partial<SceneState>) => {
+    if (partial.depth_m !== undefined) setDepth(partial.depth_m)
+    if (partial.variable !== undefined) setVariable(partial.variable)
+    if (partial.time_index !== undefined) {
+      const pct = partial.time_index <= 11 ? Math.round((partial.time_index / 11) * 100) : partial.time_index
+      setTimeIndex(pct)
+    }
+  }, [setDepth, setVariable, setTimeIndex])
 
   return (
     <div className="app-shell">
@@ -143,71 +137,134 @@ export default function App() {
         health={health}
         healthError={healthError}
         argoMeta={argoMeta}
-        scene={scene}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
         onToggleAI={() => setIsAIChatOpen(!isAIChatOpen)}
       />
       <LeftPanel
-        scene={scene}
-        onSceneChange={updateScene}
         argoMeta={argoMeta}
         selectedBBox={selectedBBox}
         onManualBBox={setSelectedBBox}
       />
-      <main className="main-scene" style={{ position: 'relative' }}>
-        <div style={{
-          position: 'absolute', top: 56, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 30, display: 'flex', gap: 0, borderRadius: 8, overflow: 'hidden',
-          border: '1px solid rgba(0,212,255,0.4)', boxShadow: '0 2px 16px rgba(0,0,0,0.5)',
-        }}>
-          {(['3d', 'map', 'globe'] as const).map(mode => (
-            <button
-              key={mode}
-              id={`view-mode-${mode}`}
-              onClick={() => setViewMode(mode)}
-              style={{
-                padding: '7px 20px',
-                background: viewMode === mode ? 'rgba(0,212,255,0.22)' : 'rgba(6,12,26,0.92)',
-                border: 'none',
-                color: viewMode === mode ? '#00d4ff' : '#8ba7bb',
-                fontSize: 11, fontFamily: 'Inter, sans-serif', fontWeight: 700,
-                cursor: 'pointer', letterSpacing: '0.8px', transition: 'all 0.2s',
-              }}
-            >
-              {mode === '3d' ? '🌊 3D OCEAN' : mode === 'map' ? '🗺️ MAP VIEW' : '🌍 GLOBE VIEW'}
-            </button>
-          ))}
-        </div>
-
-        {viewMode === '3d' ? (
+      <main className="main-scene" style={{ position: 'relative', width: '100%', height: '100%' }}>
+        {viewMode === 'ocean3d' && (
           <OceanWorld3D
-            scene={scene}
+            scene={sceneState}
             floats={argoFloats}
-            filteredFloats={filteredFloats}
             onFloatSelect={handleFloatSelect}
             selectedFloat={selectedFloat}
-            region={region}
-            onRegionSelect={handleRegionSelect}
+            region={selectedBBox ?? undefined}
+            onRegionSelect={setSelectedBBox}
+            onDepthChange={setDepth}
+            onVariableChange={setVariable}
           />
-        ) : viewMode === 'map' ? (
+        )}
+        {viewMode === 'cesium' && (
+          <CesiumViewer
+            floats={argoFloats}
+            onSelectFloat={handleFloatSelect}
+            selectedFloat={selectedFloat}
+          />
+        )}
+        {viewMode === 'map2d' && (
           <OceanMapView
-            scene={scene}
+            scene={sceneState}
+            onSceneChange={handleSceneChange}
             floats={argoFloats}
-            filteredFloats={filteredFloats}
             onFloatSelect={handleFloatSelect}
             selectedFloat={selectedFloat}
-            onRegionSelect={handleRegionSelect}
+            onGliderSelect={setSelectedGlider}
+            selectedGliderPoint={selectedGlider}
+            onRegionSelect={setSelectedBBox}
+            availableDepths={[0, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000]}
+            onViewModeChange={(m: string) => {
+              if (m === '3d' || m === 'ocean3d') setViewMode('ocean3d')
+              else if (m === 'map' || m === 'map2d') setViewMode('map2d')
+              else if (m === 'globe' || m === 'cesium') setViewMode('cesium')
+              else if (m === 'cube') setViewMode('cube')
+              else if (m === 'split') setViewMode('split')
+            }}
           />
-        ) : (
-          <OceanScene
-            scene={scene}
+        )}
+        {viewMode === 'cube' && (
+          <OceanCubeScene
+            scene={sceneState}
             floats={argoFloats}
-            filteredFloats={filteredFloats}
             onFloatSelect={handleFloatSelect}
             selectedFloat={selectedFloat}
-            onBBoxSelect={setSelectedBBox}
-            selectedBBox={selectedBBox}
-            onRegionSelect={handleRegionSelect}
+            region={selectedBBox ?? { lat_min: 0, lat_max: 30, lon_min: 55, lon_max: 100 }}
+            onRegionSelect={setSelectedBBox}
           />
+        )}
+        {viewMode === 'split' && (
+          <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+            <div style={{ flex: 1, position: 'relative', borderRight: '1px solid rgba(0, 212, 255, 0.3)' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8,
+                  zIndex: 30,
+                  backgroundColor: 'rgba(2, 6, 23, 0.85)',
+                  border: '1px solid rgba(0, 212, 255, 0.4)',
+                  borderRadius: 4,
+                  padding: '2px 8px',
+                  color: '#38bdf8',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              >
+                3D Volumetric Digital Twin
+              </div>
+              <OceanWorld3D
+                scene={sceneState}
+                floats={argoFloats}
+                onFloatSelect={handleFloatSelect}
+                selectedFloat={selectedFloat}
+                region={selectedBBox ?? undefined}
+                onRegionSelect={setSelectedBBox}
+                onDepthChange={setDepth}
+                onVariableChange={setVariable}
+              />
+            </div>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8,
+                  zIndex: 30,
+                  backgroundColor: 'rgba(2, 6, 23, 0.85)',
+                  border: '1px solid rgba(0, 212, 255, 0.4)',
+                  borderRadius: 4,
+                  padding: '2px 8px',
+                  color: '#38bdf8',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              >
+                2D High-Resolution Raster / Vector Map
+              </div>
+              <OceanMapView
+                scene={sceneState}
+                onSceneChange={handleSceneChange}
+                floats={argoFloats}
+                onFloatSelect={handleFloatSelect}
+                selectedFloat={selectedFloat}
+                onGliderSelect={setSelectedGlider}
+                selectedGliderPoint={selectedGlider}
+                onRegionSelect={setSelectedBBox}
+                availableDepths={[0, 10, 20, 30, 50, 75, 100, 150, 200, 300, 500, 750, 1000, 1500, 2000]}
+                onViewModeChange={(m: string) => {
+                  if (m === '3d' || m === 'ocean3d') setViewMode('ocean3d')
+                  else if (m === 'map' || m === 'map2d') setViewMode('map2d')
+                  else if (m === 'globe' || m === 'cesium') setViewMode('cesium')
+                  else if (m === 'cube') setViewMode('cube')
+                  else if (m === 'split') setViewMode('split')
+                }}
+              />
+            </div>
+          </div>
         )}
       </main>
       <RightPanel
@@ -218,12 +275,7 @@ export default function App() {
         profileError={profileError}
         hycomStub={health?.hycom_stub ?? false}
       />
-      <BottomBar
-        scene={scene}
-        onSceneChange={updateScene}
-        argoMeta={argoMeta}
-        currentDateStr={currentDateStr}
-      />
+      <BottomBar argoMeta={argoMeta} />
 
       {/* GPT-6 Astra Chat Drawer */}
       <AIChatModal
@@ -235,3 +287,10 @@ export default function App() {
   )
 }
 
+export default function App() {
+  return (
+    <CesiumProvider>
+      <MainApp />
+    </CesiumProvider>
+  )
+}

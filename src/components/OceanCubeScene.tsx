@@ -270,7 +270,7 @@ export default function OceanCubeScene({scene,floats,filteredFloats,onFloatSelec
     window.addEventListener("keydown",onKD);window.addEventListener("keyup",onKU)
     renderer.domElement.addEventListener("mousedown",onMD);renderer.domElement.addEventListener("mouseup",onMU);renderer.domElement.addEventListener("mousemove",onMM)
     let animId=0,lastT=0
-    const animate=(ts:number)=>{
+    const animate=(ts:number=0)=>{
       animId=requestAnimationFrame(animate)
       const dt=Math.min(0.05,(ts-lastT)/1000);lastT=ts
       waveUni.current.uTime.value+=dt*0.95
