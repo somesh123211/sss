@@ -236,7 +236,6 @@ function MainApp() {
         argoMeta={argoMeta}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onToggleAI={() => setIsAIChatOpen(!isAIChatOpen)}
       />
       <LeftPanel
         argoMeta={argoMeta}

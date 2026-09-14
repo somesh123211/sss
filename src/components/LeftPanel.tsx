@@ -2,14 +2,9 @@ import React, { useState } from 'react'
 import { OceanVariable, ModelSourceId } from '../cesium/types'
 import { ArgoMetadata } from '../services/api'
 import { useCesium } from '../cesium/CesiumContext'
+import InfoButton from './InfoButton'
 
-interface BBox {
-  lat_min: number
-  lat_max: number
-  lon_min: number
-  lon_max: number
-}
-
+interface BBox { lat_min: number; lat_max: number; lon_min: number; lon_max: number }
 interface LeftPanelProps {
   argoMeta: ArgoMetadata | null
   selectedBBox?: BBox | null
@@ -18,335 +13,230 @@ interface LeftPanelProps {
 
 const DEPTHS = [0, 10, 25, 50, 100, 200, 300, 500, 750, 1000, 1500, 2000]
 
-export default function LeftPanel({ argoMeta, selectedBBox, onManualBBox }: LeftPanelProps) {
-  const { state, setVariable, setDepth, setLayerVisibility, updateState } = useCesium()
+const VARIABLES: { value: OceanVariable; label: string; icon: string; info: string }[] = [
+  {
+    value: 'temperature', label: 'Temperature (°C)', icon: '🌡',
+    info: 'Sea water temperature in °C at the selected depth level. Surface temperature (SST) is critical for understanding cyclone intensification, monsoon strength, and marine heat waves. INCOIS IGORA/HYCOM model outputs this field across all 14 depth layers.'
+  },
+  {
+    value: 'salinity', label: 'Salinity (PSU)', icon: '🧂',
+    info: 'Salinity in Practical Salinity Units (PSU). The Bay of Bengal has lower salinity (~32 PSU) due to river runoff & monsoon rainfall, while the Arabian Sea is saltier (~36 PSU). Salinity difference drives ocean stratification and current systems.'
+  },
+  {
+    value: 'current_speed', label: 'Current Speed (m/s)', icon: '🌊',
+    info: 'Horizontal current speed in metres per second, derived from u (east-west) and v (north-south) velocity components in the HYCOM model. The Somali Current can reach 2+ m/s during SW Monsoon, affecting shipping lanes and search & rescue.'
+  },
+  {
+    value: 'ssh', label: 'Sea Surface Height (m)', icon: '📏',
+    info: 'Sea Surface Height (SSH) anomaly in metres relative to a mean sea level. High SSH indicates warm-core eddies (potential cyclone fuel). Low SSH indicates cold upwelling (good fishery zones). Measured by satellite altimeters, modelled by IGORA.'
+  },
+]
 
-  const [manLat0, setManLat0] = useState('')
-  const [manLat1, setManLat1] = useState('')
-  const [manLon0, setManLon0] = useState('')
-  const [manLon1, setManLon1] = useState('')
+// ── Info texts for each section / control ──────────────────────────────
+const INFO = {
+  modelSource:
+    'The Numerical Ocean Model is a supercomputer simulation of the Indian Ocean. INCOIS IGORA is India\'s own model. HYCOM (Hybrid Coordinate Ocean Model) is US Navy\'s global model. Copernicus GLORYS12V1 is the EU reanalysis. These models solve ocean physics equations on a 3D grid every few hours.',
+  depthSlice:
+    'The ocean is divided into depth layers — Surface (0 m), mixed layer (~0–100 m), thermocline (~100–500 m), and deep water (>500 m). Selecting a depth "slices" the 3D model field at that level, like a CT-scan of the ocean. This is the core 3D visualization capability of SamuraTech.',
+  argoFloats:
+    'Argo profiling floats are autonomous underwater robots deployed by INCOIS and partner agencies. Each float sinks to 2000 m, drifts with currents, then rises while measuring Temperature and Salinity — transmitting data via satellite. INCOIS has 13,148+ real profiles in their ERDDAP database covering 2018–2025.',
+  gliders:
+    'Underwater Gliders are autonomous vehicles that fly through the ocean in a saw-tooth pattern, measuring Temperature, Salinity, and Chlorophyll over hundreds of km. INCOIS deployed gliders in the Bay of Bengal to study the Indian Ocean Dipole and monsoon preconditioning.',
+  modelDepthField:
+    'The 3D Model Depth Field renders the numerical ocean model output as a colored surface at the selected depth. Colors represent the variable value (red=hot, blue=cold for temperature). This allows visual detection of warm eddies, cold upwelling, and regional anomalies — impossible to see from tabular data alone.',
+  currentVectors:
+    'Current vectors show the u (east) and v (north) velocity components from the model as directional arrows. The Somali Current flows northward in summer (SW Monsoon). The East India Coastal Current reverses seasonally. Vectors help predict object drift paths for search-and-rescue and oil spill response.',
+  modelBiasMap:
+    'The Model Bias Map shows where the model prediction differs from actual Argo float observations. Positive bias (warm colors) = model overestimates temperature. Negative bias = model underestimates. Systematic regional biases indicate areas needing model improvement or data assimilation.',
+  vertExag:
+    'Vertical Exaggeration scales the depth dimension relative to the horizontal. Since the ocean is ~70 million km² wide but only ~3–4 km deep, 1× scale makes depth features invisible. Higher exaggeration makes thermocline and depth layers visually prominent.',
+}
+
+export default function LeftPanel({ argoMeta }: LeftPanelProps) {
+  const { state, setVariable, setDepth, setLayerVisibility, updateState } = useCesium()
 
   return (
     <aside className="left-panel">
-      {/* Model Selection */}
-      <div className="panel-section">
-        <div className="panel-section__title">Numerical Ocean Model</div>
-        <div className="panel-section__content">
-          <div className="control-group">
-            <select
-              id="model-source-select"
-              className="control-select"
-              value={state.model_id}
-              onChange={e => updateState({ model_id: e.target.value as ModelSourceId })}
-            >
-              <option value="igora">INCOIS IGORA (Active Model)</option>
-              <option value="hycom">INCOIS RSMC HYCOM (NetCDF)</option>
-              <option value="copernicus">Copernicus GLORYS12V1 (Reanalysis)</option>
-            </select>
-          </div>
-        </div>
-      </div>
 
-      {/* Layer Toggles */}
-      <div className="panel-section">
-        <div className="panel-section__title">Visualization Layers</div>
-        <div className="panel-section__content">
-          <div className="toggle-group">
-            <button
-              id="toggle-argo"
-              className={`toggle-btn ${state.layers.argo ? 'toggle-btn--active' : ''}`}
-              onClick={() => setLayerVisibility('argo', !state.layers.argo)}
-            >
-              <span>INCOIS Argo Floats</span>
-              <div className="toggle-dot" />
-            </button>
-            <button
-              id="toggle-model-slice"
-              className={`toggle-btn ${state.layers.model_slice ? 'toggle-btn--active' : ''}`}
-              onClick={() => setLayerVisibility('model_slice', !state.layers.model_slice)}
-            >
-              <span>Model Depth Field</span>
-              <div className="toggle-dot" />
-            </button>
-            <button
-              id="toggle-currents"
-              className={`toggle-btn ${state.layers.current_vectors ? 'toggle-btn--active' : ''}`}
-              onClick={() => setLayerVisibility('current_vectors', !state.layers.current_vectors)}
-            >
-              <span>Current Vectors (u,v)</span>
-              <div className="toggle-dot" />
-            </button>
-            <button
-              id="toggle-particles"
-              className={`toggle-btn ${state.layers.current_particles ? 'toggle-btn--active' : ''}`}
-              onClick={() => setLayerVisibility('current_particles', !state.layers.current_particles)}
-            >
-              <span>Current Flow Particles</span>
-              <div className="toggle-dot" />
-            </button>
-            <button
-              id="toggle-glider"
-              className={`toggle-btn ${state.layers.glider ? 'toggle-btn--active' : ''}`}
-              onClick={() => setLayerVisibility('glider', !state.layers.glider)}
-            >
-              <span>IFREMER OceanGliders</span>
-              <div className="toggle-dot" />
-            </button>
-            <button
-              id="toggle-bathymetry"
-              className={`toggle-btn ${state.layers.bathymetry ? 'toggle-btn--active' : ''}`}
-              onClick={() => setLayerVisibility('bathymetry', !state.layers.bathymetry)}
-            >
-              <span>GEBCO Bathymetry Grid</span>
-              <div className="toggle-dot" />
-            </button>
-            <button
-              id="toggle-error-map"
-              className={`toggle-btn ${state.layers.model_error ? 'toggle-btn--active' : ''}`}
-              onClick={() => setLayerVisibility('model_error', !state.layers.model_error)}
-            >
-              <span>Model Error (Obs Bias)</span>
-              <div className="toggle-dot" />
-            </button>
-            <button
-              id="toggle-density"
-              className={`toggle-btn ${state.layers.observation_density ? 'toggle-btn--active' : ''}`}
-              onClick={() => setLayerVisibility('observation_density', !state.layers.observation_density)}
-            >
-              <span>Observation Density</span>
-              <div className="toggle-dot" />
-            </button>
-            <button
-              id="toggle-boundaries"
-              className={`toggle-btn ${state.layers.boundaries ? 'toggle-btn--active' : ''}`}
-              onClick={() => setLayerVisibility('boundaries', !state.layers.boundaries)}
-            >
-              <span>Regional Boundaries</span>
-              <div className="toggle-dot" />
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* ── 1. Numerical Ocean Model ─────────────────────────────── */}
+      <Section title="Ocean Model Source" info={INFO.modelSource}>
+        <select
+          id="model-source-select"
+          className="control-select"
+          value={state.model_id}
+          onChange={e => updateState({ model_id: e.target.value as ModelSourceId })}
+        >
+          <option value="igora">INCOIS IGORA (Live)</option>
+          <option value="hycom">INCOIS HYCOM (NetCDF)</option>
+          <option value="copernicus">Copernicus GLORYS12V1</option>
+        </select>
+      </Section>
 
-      {/* Variable Selection */}
-      <div className="panel-section">
-        <div className="panel-section__title">Ocean Variable</div>
-        <div className="panel-section__content">
-          <div className="control-group">
-            <select
-              id="variable-select"
-              className="control-select"
-              value={state.variable}
-              onChange={e => setVariable(e.target.value as OceanVariable)}
-            >
-              <option value="temperature">Temperature (°C)</option>
-              <option value="salinity">Salinity (PSU)</option>
-              <option value="current_speed">Current Speed (m/s)</option>
-              <option value="ssh">Sea Surface Height (m)</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Depth Slider */}
-      <div className="panel-section">
-        <div className="panel-section__title">Depth Level</div>
-        <div className="panel-section__content">
-          <div className="control-group">
-            <div className="control-label">Target Depth (m)</div>
-            <select
-              id="depth-select"
-              className="control-select"
-              value={state.depth_m}
-              onChange={e => setDepth(Number(e.target.value))}
-            >
-              {DEPTHS.map(d => (
-                <option key={d} value={d}>
-                  {d === 0 ? 'Surface (0 m)' : `${d} m`}
-                </option>
-              ))}
-            </select>
-            <div className="control-value" style={{ color: '#00d4ff', fontWeight: 700, fontSize: 12 }}>
-              {state.depth_m === 0 ? '🌊 Surface (0m)' : `⬇ ${state.depth_m} m depth`}
-            </div>
-            {/* Visual depth bar */}
-            <div
-              style={{
-                marginTop: 8,
-                position: 'relative',
-                height: 70,
-                background: 'rgba(0,0,0,0.3)',
-                borderRadius: 4,
-                border: '1px solid rgba(0,212,255,0.2)',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  background:
-                    'linear-gradient(to bottom, rgba(0,180,220,0.5) 0%, rgba(0,80,160,0.7) 40%, rgba(0,30,80,0.9) 100%)',
-                }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  top: `${Math.min(95, (Math.log1p(state.depth_m) / Math.log1p(2000)) * 100)}%`,
-                  height: 2,
-                  background: '#00ffff',
-                  boxShadow: '0 0 6px #00ffff',
-                }}
-              />
-              <div style={{ position: 'absolute', top: 2, left: 4, fontSize: 8, color: 'rgba(255,255,255,0.7)' }}>
-                0 m Surface
-              </div>
-              <div style={{ position: 'absolute', top: '40%', left: 4, fontSize: 8, color: 'rgba(255,255,255,0.5)' }}>
-                500 m
-              </div>
-              <div style={{ position: 'absolute', bottom: 2, left: 4, fontSize: 8, color: 'rgba(255,255,255,0.4)' }}>
-                2000 m Deep
-              </div>
-              <div
-                style={{
-                  position: 'absolute',
-                  right: 4,
-                  top: `calc(${Math.min(91, (Math.log1p(state.depth_m) / Math.log1p(2000)) * 100)}% - 1px)`,
-                  fontSize: 9,
-                  color: '#00ffff',
-                  fontWeight: 700,
-                  fontFamily: 'monospace',
-                }}
+      {/* ── 2. Ocean Variable ────────────────────────────────────── */}
+      <Section title="Ocean Variable" info="Select which ocean parameter to visualize in 3D. Each variable comes from the numerical model output (NetCDF) and can be compared against real Argo float observations.">
+        <div className="var-grid">
+          {VARIABLES.map(v => (
+            <div key={v.value} style={{ position: 'relative' }}>
+              <button
+                className={`var-btn ${state.variable === v.value ? 'var-btn--active' : ''}`}
+                onClick={() => setVariable(v.value as OceanVariable)}
+                title={v.label}
               >
-                {state.depth_m}m ◀
+                <span style={{ fontSize: 14 }}>{v.icon}</span>
+                <span style={{ fontSize: 9, marginTop: 2 }}>{v.label.split(' ')[0]}</span>
+              </button>
+              <div style={{ position: 'absolute', top: 2, right: 2, zIndex: 2 }}>
+                <InfoButton content={v.info} title={v.label} position="right" />
               </div>
             </div>
-          </div>
+          ))}
         </div>
-      </div>
-
-      {/* 3D Settings */}
-      <div className="panel-section">
-        <div className="panel-section__title">Geospatial 3D Controls</div>
-        <div className="panel-section__content">
-          <div className="control-group">
-            <div className="control-label">Vertical Exaggeration</div>
-            <input
-              id="vert-exag-slider"
-              type="range"
-              className="control-slider"
-              min={1}
-              max={10}
-              step={1}
-              value={state.vertical_exaggeration}
-              style={
-                {
-                  '--slider-pct': `${((state.vertical_exaggeration - 1) / 9) * 100}%`,
-                } as React.CSSProperties
-              }
-              onChange={e => updateState({ vertical_exaggeration: Number(e.target.value) })}
-            />
-            <div className="control-value">{state.vertical_exaggeration}× (Cesium WGS84)</div>
-          </div>
+        <div className="depth-label" style={{ marginTop: 6 }}>
+          Active: <b style={{ color: '#38bdf8' }}>{VARIABLES.find(v => v.value === state.variable)?.label}</b>
         </div>
-      </div>
+      </Section>
 
-      {/* Dataset Info */}
-      {argoMeta && (
-        <div className="panel-section">
-          <div className="panel-section__title">Argo Dataset Metadata</div>
-          <div className="panel-section__content">
-            <MetaRow label="Platforms" value={String(argoMeta.unique_platforms)} />
-            <MetaRow label="Profiles" value={argoMeta.total_profiles.toLocaleString()} />
-            <MetaRow
-              label="Start"
-              value={new Date(argoMeta.time_range.start).toLocaleDateString()}
-            />
-            <MetaRow
-              label="End"
-              value={new Date(argoMeta.time_range.end).toLocaleDateString()}
-            />
-            <MetaRow
-              label="Region"
-              value={`${argoMeta.geographic_coverage.lat_min.toFixed(1)}–${argoMeta.geographic_coverage.lat_max.toFixed(1)}°N`}
-            />
-            <div style={{ fontSize: 9, color: 'var(--color-text-muted)', marginTop: 4, lineHeight: 1.5 }}>
-              Source: INCOIS ERDDAP
-              <br />
-              Indian_ARGO_Floats
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Manual Coordinates Input */}
-      <div className="panel-section">
-        <div className="panel-section__title">Spatial Bounding Box</div>
-        <div className="panel-section__content">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
-            {[
-              { label: 'Lat Min', val: manLat0, set: setManLat0, ph: '0' },
-              { label: 'Lat Max', val: manLat1, set: setManLat1, ph: '25' },
-              { label: 'Lon Min', val: manLon0, set: setManLon0, ph: '60' },
-              { label: 'Lon Max', val: manLon1, set: setManLon1, ph: '100' },
-            ].map(({ label, val, set, ph }) => (
-              <div key={label} className="control-group">
-                <div className="control-label">{label}</div>
-                <input
-                  type="number"
-                  className="control-select"
-                  value={val}
-                  placeholder={ph}
-                  onChange={e => set(e.target.value)}
-                  style={{ padding: '3px 6px', fontSize: 11 }}
-                />
-              </div>
-            ))}
-          </div>
-          <button
-            style={{
-              width: '100%',
-              marginTop: 6,
-              padding: '5px 0',
-              borderRadius: 4,
-              background: 'rgba(0,212,255,0.1)',
-              border: '1px solid rgba(0,212,255,0.3)',
-              color: 'var(--color-accent-cyan)',
-              fontSize: 11,
-              fontFamily: 'var(--font-sans)',
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
-            onClick={() => {
-              const bbox = {
-                lat_min: parseFloat(manLat0) || 0,
-                lat_max: parseFloat(manLat1) || 25,
-                lon_min: parseFloat(manLon0) || 60,
-                lon_max: parseFloat(manLon1) || 100,
-              }
-              onManualBBox?.(bbox)
-            }}
+      {/* ── 3. Depth Slice Navigation ────────────────────────────── */}
+      <Section title="Depth Slice" info={INFO.depthSlice}>
+        <select
+          id="depth-select"
+          className="control-select"
+          value={state.depth_m}
+          onChange={e => setDepth(Number(e.target.value))}
+        >
+          {DEPTHS.map(d => (
+            <option key={d} value={d}>{d === 0 ? 'Surface (0 m)' : `${d} m`}</option>
+          ))}
+        </select>
+        {/* Visual depth bar */}
+        <div className="depth-bar">
+          <div className="depth-bar__fill" />
+          <div
+            className="depth-bar__marker"
+            style={{ top: `${Math.min(92, (Math.log1p(state.depth_m) / Math.log1p(2000)) * 100)}%` }}
+          />
+          <span className="depth-bar__label depth-bar__label--top">0 m — Surface</span>
+          <span className="depth-bar__label depth-bar__label--mid">500 m</span>
+          <span className="depth-bar__label depth-bar__label--bot">2000 m</span>
+          <span
+            className="depth-bar__cur"
+            style={{ top: `calc(${Math.min(88, (Math.log1p(state.depth_m) / Math.log1p(2000)) * 100)}% - 2px)` }}
           >
-            Apply Bounding Box
-          </button>
+            {state.depth_m} m ◀
+          </span>
         </div>
-      </div>
+      </Section>
+
+      {/* ── 4. Observation Layers ────────────────────────────────── */}
+      <Section title="Observation Layers" info="Real in-situ observations from autonomous instruments deployed in the Indian Ocean. Toggle to overlay them on the 3D globe alongside model predictions.">
+        <LayerToggle
+          id="toggle-argo"
+          label="Argo Floats"
+          sub={`${argoMeta?.total_profiles?.toLocaleString() ?? '—'} profiles`}
+          icon="🟡"
+          active={state.layers.argo}
+          onToggle={() => setLayerVisibility('argo', !state.layers.argo)}
+          info={INFO.argoFloats}
+        />
+        <LayerToggle
+          id="toggle-glider"
+          label="Underwater Gliders"
+          sub="Bay of Bengal tracks"
+          icon="🔶"
+          active={state.layers.glider}
+          onToggle={() => setLayerVisibility('glider', !state.layers.glider)}
+          info={INFO.gliders}
+        />
+      </Section>
+
+      {/* ── 5. Model Layers ─────────────────────────────────────── */}
+      <Section title="Model Layers" info="Outputs from the INCOIS numerical ocean model. These are predictions/simulations that can be compared against real observation data to assess model accuracy.">
+        <LayerToggle
+          id="toggle-model-slice"
+          label="Model Depth Field"
+          sub="3D volumetric slice"
+          icon="🌐"
+          active={state.layers.model_slice}
+          onToggle={() => setLayerVisibility('model_slice', !state.layers.model_slice)}
+          info={INFO.modelDepthField}
+        />
+        <LayerToggle
+          id="toggle-currents"
+          label="Current Vectors (u,v)"
+          sub="Directional flow arrows"
+          icon="➡"
+          active={state.layers.current_vectors}
+          onToggle={() => setLayerVisibility('current_vectors', !state.layers.current_vectors)}
+          info={INFO.currentVectors}
+        />
+        <LayerToggle
+          id="toggle-error-map"
+          label="Model Bias Map"
+          sub="HYCOM − Argo error"
+          icon="⚖"
+          active={state.layers.model_error}
+          onToggle={() => setLayerVisibility('model_error', !state.layers.model_error)}
+          info={INFO.modelBiasMap}
+        />
+      </Section>
+
+      {/* ── 6. Display Options ──────────────────────────────────── */}
+      <Section title="Display Options" info="Visual rendering settings for the 3D scene.">
+        <div className="control-group">
+          <div className="control-label" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            Vertical Exaggeration
+            <InfoButton content={INFO.vertExag} title="Vertical Exaggeration" position="right" />
+          </div>
+          <input
+            id="vert-exag-slider"
+            type="range"
+            className="control-slider"
+            min={1} max={10} step={1}
+            value={state.vertical_exaggeration}
+            style={{ '--slider-pct': `${((state.vertical_exaggeration - 1) / 9) * 100}%` } as React.CSSProperties}
+            onChange={e => updateState({ vertical_exaggeration: Number(e.target.value) })}
+          />
+          <div className="control-value">{state.vertical_exaggeration}× depth scale</div>
+        </div>
+      </Section>
+
     </aside>
   )
 }
 
-function MetaRow({ label, value }: { label: string; value: string }) {
+/* ── Sub-components ──────────────────────────────────────────────── */
+
+function Section({ title, info, children }: { title: string; info?: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, gap: 8 }}>
-      <span style={{ color: 'var(--color-text-muted)' }}>{label}</span>
-      <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text-primary)', fontSize: 10 }}>
-        {value}
-      </span>
+    <div className="panel-section">
+      <div className="panel-section__title">
+        {title}
+        {info && <InfoButton content={info} title={title} position="right" />}
+      </div>
+      <div className="panel-section__content">{children}</div>
     </div>
+  )
+}
+
+function LayerToggle({
+  id, label, sub, icon, active, onToggle, info,
+}: {
+  id: string; label: string; sub: string; icon: string
+  active: boolean; onToggle: () => void; info?: string
+}) {
+  return (
+    <button id={id} className={`layer-row ${active ? 'layer-row--on' : ''}`} onClick={onToggle}>
+      <span className="layer-row__icon">{icon}</span>
+      <div className="layer-row__text">
+        <div className="layer-row__label">{label}</div>
+        <div className="layer-row__sub">{sub}</div>
+      </div>
+      {info && (
+        <span onClick={e => e.stopPropagation()}>
+          <InfoButton content={info} title={label} position="left" />
+        </span>
+      )}
+      <div className={`layer-row__toggle ${active ? 'layer-row__toggle--on' : ''}`} />
+    </button>
   )
 }

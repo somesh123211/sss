@@ -235,9 +235,12 @@ export default function OceanMapView({
   const [gliderWaypoints, setGliderWaypoints] = useState<GliderWaypointItem[]>([])
   const [gliderLoading, setGliderLoading] = useState(false)
 
-  // Current vectors
+  // Current vectors (from show_currents toggle)
   const [currentVectors, setCurrentVectors] = useState<CurrentVector[]>([])
   const [currentsLoading, setCurrentsLoading] = useState(false)
+
+  // Auto current arrows when variable = current_speed
+  const [autoCurrentVectors, setAutoCurrentVectors] = useState<CurrentVector[]>([])
 
   // Tooltip state
   const [tooltip, setTooltip] = useState<{
@@ -299,9 +302,22 @@ export default function OceanMapView({
           return
         }
 
-        setModelVminMax([vmin, vmax])
+        setModelVminMax([vmin, vmax])   // legend shows actual data range per depth
+
+        // ── Fixed global colormap ranges for canvas painting ──────────────────
+        // These are FIXED so that color changes are visible when switching depth:
+        // Cold deep water → blue, warm surface → red. Auto-scaling per depth hides
+        // this because each depth fills the full color range independently.
+        const FIXED_RANGES: Record<string, [number, number]> = {
+          temperature:   [2,  32],    // 2°C abyssal → 32°C tropical surface
+          salinity:      [30, 40],    // 30 PSU (Bay of Bengal) → 40 PSU (Red Sea)
+          current_speed: [0,  1.5],   // calm → strong Somali Current
+          ssh:           [-0.5, 0.5], // SSH anomaly in metres
+        }
+        const [paintMin, paintMax] = FIXED_RANGES[scene.variable] ?? [vmin, vmax]
 
         // Canvas width = longitudes count, Canvas height = latitudes count
+
         const width = lons.length
         const height = lats.length
         const canvas = document.createElement('canvas')
@@ -337,11 +353,11 @@ export default function OceanMapView({
             } else {
               let rgb: [number, number, number]
               if (scene.variable === 'salinity') {
-                rgb = salinityToRgb(val, vmin, vmax)
+                rgb = salinityToRgb(val, paintMin, paintMax)
               } else if (scene.variable === 'current_speed') {
-                rgb = currentSpeedToRgb(val, vmin, vmax)
+                rgb = currentSpeedToRgb(val, paintMin, paintMax)
               } else {
-                rgb = tempToRgb(val, vmin, vmax)
+                rgb = tempToRgb(val, paintMin, paintMax)
               }
               d[pixelIdx] = rgb[0]
               d[pixelIdx + 1] = rgb[1]
@@ -377,6 +393,57 @@ export default function OceanMapView({
       cancelled = true
     }
   }, [scene.show_model, scene.variable, scene.depth_m, modelTimeIdx])
+
+  // ── 1b. Auto-fetch current arrows whenever variable=current_speed ─────────────
+  useEffect(() => {
+    if (scene.variable !== 'current_speed') {
+      setAutoCurrentVectors([])
+      return
+    }
+
+    let cancelled = false
+    api.modelCurrentSlice(scene.depth_m, modelTimeIdx)
+      .then((data) => {
+        if (cancelled || !data?.u?.length || !data?.v?.length) return
+        const { lat: lats, lon: lons, u: uGrid, v: vGrid, speed: spdGrid, vmax } = data
+        const vectors: CurrentVector[] = []
+
+        // Subsample for legibility — denser than the toggle layer
+        const stepLat = Math.max(1, Math.floor(lats.length / 20))
+        const stepLon = Math.max(1, Math.floor(lons.length / 28))
+
+        for (let i = 0; i < lats.length; i += stepLat) {
+          for (let j = 0; j < lons.length; j += stepLon) {
+            const u = uGrid[i]?.[j]
+            const v = vGrid[i]?.[j]
+            const spd = spdGrid[i]?.[j]
+            if (u == null || v == null || spd == null || isNaN(spd) || spd < 0.01) continue
+
+            const headingRad = Math.atan2(v, u)
+            const headingDeg = (headingRad * 180) / Math.PI
+            const lengthDeg = Math.min(1.2, (spd / (vmax || 1.2)) * 0.8 + 0.1)
+            const endLon = lons[j] + Math.cos(headingRad) * lengthDeg
+            const endLat = lats[i] + Math.sin(headingRad) * lengthDeg
+            const rgb = currentSpeedToRgb(spd, 0, vmax || 1.2)
+
+            vectors.push({
+              from: [lons[j], lats[i]],
+              to: [endLon, endLat],
+              speed: spd,
+              u,
+              v,
+              headingDeg,
+              color: [rgb[0], rgb[1], rgb[2], 240],
+              width: Math.min(3.5, Math.max(1.5, spd * 4)),
+            })
+          }
+        }
+        if (!cancelled) setAutoCurrentVectors(vectors)
+      })
+      .catch(() => {})
+
+    return () => { cancelled = true }
+  }, [scene.variable, scene.depth_m, modelTimeIdx])
 
   // ── 2. Fetch Bathymetry Elevation Grid ───────────────────────────────────────
   useEffect(() => {
@@ -593,12 +660,17 @@ export default function OceanMapView({
       )
     }
 
-    // C. Current Flow Vectors Layer (Directional line segments)
-    if (scene.show_currents && currentVectors.length > 0) {
+    // C. Current Flow Vectors Layer (Directional line segments) — from show_currents toggle
+    const activeVectors = scene.variable === 'current_speed'
+      ? autoCurrentVectors  // always show when viewing current speed heatmap
+      : currentVectors      // only show when show_currents toggle is ON
+
+    if ((scene.show_currents || scene.variable === 'current_speed') && activeVectors.length > 0) {
+      // Shaft lines
       list.push(
         new LineLayer({
           id: 'current-flow-vectors',
-          data: currentVectors,
+          data: activeVectors,
           getSourcePosition: (d: CurrentVector) => d.from,
           getTargetPosition: (d: CurrentVector) => d.to,
           getColor: (d: CurrentVector) => d.color,
@@ -609,9 +681,9 @@ export default function OceanMapView({
             if (info.object) {
               const d = info.object as CurrentVector
               setTooltip({
-                text: `Current Velocity: ${d.speed.toFixed(2)} m/s`,
-                subtext: `Heading: ${d.headingDeg.toFixed(0)}° • u: ${d.u.toFixed(2)} m/s, v: ${d.v.toFixed(2)} m/s`,
-                badge: 'DERIVED SPEED: sqrt(u²+v²)',
+                text: `Current Velocity: ${d.speed.toFixed(3)} m/s`,
+                subtext: `Heading: ${((d.headingDeg + 360) % 360).toFixed(0)}° | u=${d.u.toFixed(3)} m/s, v=${d.v.toFixed(3)} m/s`,
+                badge: 'DERIVED: √(u²+v²)',
                 badgeColor: '#00e5ff',
                 x: info.x,
                 y: info.y,
@@ -620,6 +692,48 @@ export default function OceanMapView({
               setTooltip(null)
             }
           },
+        })
+      )
+
+      // Arrowheads — small triangles at the tip of each vector
+      const arrowheads = activeVectors.map((d) => {
+        const dx = d.to[0] - d.from[0]
+        const dy = d.to[1] - d.from[1]
+        const len = Math.sqrt(dx * dx + dy * dy) || 1
+        const nx = dx / len
+        const ny = dy / len
+        // Offset arrowhead back from tip by 15% of the vector length so it's centred on tip
+        return {
+          position: [d.to[0] - nx * len * 0.0, d.to[1] - ny * len * 0.0] as [number, number],
+          angle: Math.atan2(ny, nx) * (180 / Math.PI) - 90,
+          color: d.color,
+          speed: d.speed,
+        }
+      })
+
+      list.push(
+        new ScatterplotLayer({
+          id: 'current-arrowheads',
+          data: arrowheads,
+          getPosition: (d: any) => [d.position[0], d.position[1], 0] as [number, number, number],
+          getRadius: (d: any) => Math.min(14000, Math.max(6000, d.speed * 12000)),
+          getFillColor: (d: any) => d.color,
+          radiusUnits: 'meters',
+          pickable: false,
+          parameters: { depthTest: false },
+        })
+      )
+
+      // Second scatterplot: smaller bright center dot to visually sharpen arrowhead
+      list.push(
+        new ScatterplotLayer({
+          id: 'current-arrowheads-inner',
+          data: arrowheads,
+          getPosition: (d: any) => [d.position[0], d.position[1], 0] as [number, number, number],
+          getRadius: (d: any) => Math.min(7000, Math.max(3000, d.speed * 6000)),
+          getFillColor: () => [255, 255, 255, 180],
+          radiusUnits: 'meters',
+          pickable: false,
         })
       )
     }
@@ -1083,48 +1197,6 @@ export default function OceanMapView({
           </div>
         </div>
 
-        {/* Provenance Badges Bar */}
-        <div style={{ display: 'flex', gap: 6 }}>
-          <div
-            style={{
-              background: 'rgba(2,10,24,0.85)',
-              border: '1px solid rgba(0,230,118,0.4)',
-              borderRadius: 4,
-              padding: '3px 8px',
-              fontSize: 10,
-              color: '#00e676',
-              fontWeight: 600,
-            }}
-          >
-            ● ARGO: REAL (INCOIS)
-          </div>
-          <div
-            style={{
-              background: 'rgba(2,10,24,0.85)',
-              border: '1px solid rgba(255,215,0,0.4)',
-              borderRadius: 4,
-              padding: '3px 8px',
-              fontSize: 10,
-              color: '#ffd54f',
-              fontWeight: 600,
-            }}
-          >
-            ● GLIDER: REAL (IFREMER sea057)
-          </div>
-          <div
-            style={{
-              background: 'rgba(2,10,24,0.85)',
-              border: '1px solid rgba(255,145,0,0.4)',
-              borderRadius: 4,
-              padding: '3px 8px',
-              fontSize: 10,
-              color: '#ffb74d',
-              fontWeight: 600,
-            }}
-          >
-            ⚠ MODEL: SYNTHETIC / FALLBACK
-          </div>
-        </div>
       </div>
 
       {/* ── Bottom-Right: Professional Scientific Legend ───────────────────── */}
@@ -1199,9 +1271,18 @@ export default function OceanMapView({
                   }}
                 />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: '#a0c4d8', marginTop: 2, fontFamily: 'monospace' }}>
-                  <span>{modelVminMax[0].toFixed(1)}</span>
-                  <span>{((modelVminMax[0] + modelVminMax[1]) / 2).toFixed(1)}</span>
-                  <span>{modelVminMax[1].toFixed(1)}</span>
+                  {/* Show the FIXED global range (matches canvas colors) */}
+                  {scene.variable === 'temperature' && <><span>2</span><span>17</span><span>32 °C</span></>}
+                  {scene.variable === 'salinity'    && <><span>30</span><span>35</span><span>40 PSU</span></>}
+                  {scene.variable === 'current_speed' && <><span>0</span><span>0.75</span><span>1.5 m/s</span></>}
+                  {scene.variable !== 'temperature' && scene.variable !== 'salinity' && scene.variable !== 'current_speed' && (
+                    <><span>{modelVminMax[0].toFixed(1)}</span><span>{((modelVminMax[0] + modelVminMax[1]) / 2).toFixed(1)}</span><span>{modelVminMax[1].toFixed(1)}</span></>
+                  )}
+                </div>
+                {/* Actual per-depth data range as small annotation */}
+                <div style={{ fontSize: 8, color: '#475569', marginTop: 3, textAlign: 'right' }}>
+                  Actual at {scene.depth_m}m: {modelVminMax[0].toFixed(1)} – {modelVminMax[1].toFixed(1)}
+                  {scene.variable === 'temperature' ? ' °C' : scene.variable === 'salinity' ? ' PSU' : ' m/s'}
                 </div>
               </div>
             )}

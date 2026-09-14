@@ -62,6 +62,8 @@ export function worldToGeo(x: number, y: number, z: number): { lat: number; lon:
 //   >0.5 = land (higher = higher elevation)
 // Also returns a separate Uint8Array land mask (0=ocean, 255=land)
 function generateIndianOceanHeightmap(SIZE: number): { height: Float32Array; landMask: Uint8Array } {
+  const LAT_MIN = -30, LAT_MAX = 30
+  const LON_MIN =  40, LON_MAX = 110
   const height   = new Float32Array(SIZE * SIZE)
   const landMask = new Uint8Array(SIZE * SIZE)
 
@@ -728,10 +730,12 @@ export default function OceanWorld3D({
   const currentGroupRef = useRef<THREE.Group | null>(null)
   const transectGroupRef = useRef<THREE.Group | null>(null)
   const isosurfaceMeshRef = useRef<THREE.Mesh | null>(null)
-  const pillarGroupRef = useRef<THREE.Group | null>(null)
-  const particleUniRef = useRef<any>(null)
-  const raycasterRef = useRef(new THREE.Raycaster())
-  const mouseRef     = useRef(new THREE.Vector2())
+  const pillarGroupRef    = useRef<THREE.Group | null>(null)
+  const particleUniRef    = useRef<any>(null)
+  const floorMatRef       = useRef<THREE.ShaderMaterial | null>(null)
+  const landMaskTexRef    = useRef<THREE.Texture | null>(null)
+  const raycasterRef      = useRef(new THREE.Raycaster())
+  const mouseRef          = useRef(new THREE.Vector2())
   const keysRef      = useRef<Record<string, boolean>>({})
   const underwaterRef= useRef(false)
   const flightRef    = useRef<{
@@ -1147,20 +1151,21 @@ export default function OceanWorld3D({
     cam.getWorldDirection(dir)
     right.crossVectors(dir, new THREE.Vector3(0,1,0)).normalize()
     const move = new THREE.Vector3()
-    if (k['KeyW'] || k['ArrowUp'])    move.addScaledVector(dir,    spd)
-    if (k['KeyS'] || k['ArrowDown'])  move.addScaledVector(dir,   -spd)
-    if (k['KeyA'] || k['ArrowLeft'])  move.addScaledVector(right, -spd)
-    if (k['KeyD'] || k['ArrowRight']) move.addScaledVector(right,  spd)
-    if (k['KeyQ'] || k['PageDown'])   move.y -= spd
-    if (k['KeyE'] || k['PageUp'])     move.y += spd
+    if (keys['KeyW'] || keys['ArrowUp'])    move.addScaledVector(dir,    spd)
+    if (keys['KeyS'] || keys['ArrowDown'])  move.addScaledVector(dir,   -spd)
+    if (keys['KeyA'] || keys['ArrowLeft'])  move.addScaledVector(right, -spd)
+    if (keys['KeyD'] || keys['ArrowRight']) move.addScaledVector(right,  spd)
+    if (keys['KeyQ'] || keys['PageDown'])   move.y -= spd
+    if (keys['KeyE'] || keys['PageUp'])     move.y += spd
     if (move.lengthSq() > 0) {
       cam.position.add(move)
       ctrl.target.add(move)
     }
-  }
+  }, [])
 
   // ── Smooth Spherical Globe Flight Animation ─────────────────────────────
-  const smoothFlyTo = useCallback((targetLat: number, targetLon: number, altitude = 1600, targetCenter = new THREE.Vector3(0, 0, 0), duration = 900) => {
+  const smoothFlyTo = useCallback((targetLat: number, targetLon: number, altitude = 1600, targetCenter?: THREE.Vector3, duration = 900) => {
+    const center = targetCenter ?? new THREE.Vector3(0, 0, 0)
     const cam = cameraRef.current
     const ctrl = controlsRef.current
     if (!cam || !ctrl) return
@@ -1171,7 +1176,7 @@ export default function OceanWorld3D({
       startPos: cam.position.clone(),
       endPos,
       startTarget: ctrl.target.clone(),
-      endTarget: targetCenter.clone(),
+      endTarget: center.clone(),
       startTime: performance.now(),
       duration,
     }
@@ -1357,59 +1362,76 @@ export default function OceanWorld3D({
     if (!showActiveSlice || !scene.show_model) return
 
     const varIdx = scene.variable === 'salinity' ? 1 : scene.variable === 'current_speed' ? 2 : 0
-    const varStr = scene.variable === 'current_speed' ? 'temperature' : scene.variable
+    const isCurrentSpeed = scene.variable === 'current_speed'
+    const varStr = isCurrentSpeed ? 'temperature' : scene.variable  // used only for non-current
 
-    api.modelDepthSlice(varStr, scene.depth_m, 0).then((data) => {
-      if (!data?.values?.length) return
-      const { lat: lats, lon: lons, values, vmin, vmax } = data
-      const rows = lats.length, cols = lons.length
-      const buf = new Float32Array(rows * cols)
-
-      let k = 0
-      for (let i = 0; i < rows; i++) {
-        for (let j = 0; j < cols; j++) {
-          const v = values[i]?.[j]
-          if (v != null && isFinite(v) && vmax > vmin) {
-            buf[k++] = (v - vmin) / (vmax - vmin)
-          } else {
-            buf[k++] = 0
+    if (isCurrentSpeed) {
+      // Fetch u AND v separately, combine into speed magnitude
+      Promise.all([
+        api.modelCurrentSlice(scene.depth_m, 0),
+      ]).then(([curData]) => {
+        if (!curData?.speed?.length) return
+        const { lat: lats, lon: lons, speed: speedVals, vmin, vmax } = curData
+        const rows = lats.length, cols = lons.length
+        const buf = new Float32Array(rows * cols)
+        let k = 0
+        const span = (vmax - vmin) || 1
+        for (let i = 0; i < rows; i++)
+          for (let j = 0; j < cols; j++) {
+            const v = speedVals[i]?.[j]
+            buf[k++] = (v != null && isFinite(v)) ? Math.max(0, Math.min(1, (v - vmin) / span)) : 0
+          }
+        const tex = new THREE.DataTexture(buf, cols, rows, THREE.RedFormat, THREE.FloatType)
+        tex.needsUpdate = true
+        const sliceR = Math.max(10, GLOBE_R - scene.depth_m * DEPTH_SCALE)
+        const mat = new THREE.ShaderMaterial({
+          vertexShader: SPHERE_SLICE_VERT, fragmentShader: SPHERE_SLICE_FRAG,
+          uniforms: {
+            uDataTex:  { value: tex }, uOpacity:  { value: 0.75 },
+            uVariable: { value: 2 }, uEbkMode:  { value: 0 },
+            uVmin:     { value: vmin }, uVmax: { value: vmax },
+          },
+          transparent: true, depthWrite: false, side: THREE.DoubleSide,
+        })
+        const geo = new THREE.SphereGeometry(sliceR, 96, 64)
+        group.add(new THREE.Mesh(geo, mat))
+        const ringPts: THREE.Vector3[] = []
+        for (let deg = 0; deg <= 360; deg += 4) ringPts.push(geoToWorld(0, deg, scene.depth_m))
+        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 })))
+      }).catch(() => {})
+    } else {
+      api.modelDepthSlice(varStr, scene.depth_m, 0).then((data) => {
+        if (!data?.values?.length) return
+        const { lat: lats, lon: lons, values, vmin, vmax } = data
+        const rows = lats.length, cols = lons.length
+        const buf = new Float32Array(rows * cols)
+        let k = 0
+        for (let i = 0; i < rows; i++) {
+          for (let j = 0; j < cols; j++) {
+            const v = values[i]?.[j]
+            if (v != null && isFinite(v) && vmax > vmin) {
+              buf[k++] = (v - vmin) / (vmax - vmin)
+            } else { buf[k++] = 0 }
           }
         }
-      }
-
-      const tex = new THREE.DataTexture(buf, cols, rows, THREE.RedFormat, THREE.FloatType)
-      tex.needsUpdate = true
-
-      const sliceR = Math.max(10, GLOBE_R - scene.depth_m * DEPTH_SCALE)
-      const mat = new THREE.ShaderMaterial({
-        vertexShader:   SPHERE_SLICE_VERT,
-        fragmentShader: SPHERE_SLICE_FRAG,
-        uniforms: {
-          uDataTex:  { value: tex },
-          uOpacity:  { value: 0.75 },
-          uVariable: { value: varIdx },
-          uEbkMode:  { value: ebkMode === 'error' ? 1 : 0 },
-          uVmin:     { value: vmin },
-          uVmax:     { value: vmax },
-        },
-        transparent: true,
-        depthWrite:  false,
-        side:        THREE.DoubleSide,
-      })
-
-      const geo = new THREE.SphereGeometry(sliceR, 96, 64)
-      const mesh = new THREE.Mesh(geo, mat)
-      group.add(mesh)
-
-      // Glowing Cyan Equatorial & Meridian ring at target depth
-      const ringPts: THREE.Vector3[] = []
-      for (let deg = 0; deg <= 360; deg += 4) {
-        ringPts.push(geoToWorld(0, deg, scene.depth_m))
-      }
-      const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts)
-      const ringMat = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 })
-      group.add(new THREE.Line(ringGeo, ringMat))
-    }).catch(() => {})
+        const tex = new THREE.DataTexture(buf, cols, rows, THREE.RedFormat, THREE.FloatType)
+        tex.needsUpdate = true
+        const sliceR = Math.max(10, GLOBE_R - scene.depth_m * DEPTH_SCALE)
+        const mat = new THREE.ShaderMaterial({
+          vertexShader: SPHERE_SLICE_VERT, fragmentShader: SPHERE_SLICE_FRAG,
+          uniforms: {
+            uDataTex:  { value: tex }, uOpacity: { value: 0.75 },
+            uVariable: { value: varIdx }, uEbkMode: { value: ebkMode === 'error' ? 1 : 0 },
+            uVmin: { value: vmin }, uVmax: { value: vmax },
+          },
+          transparent: true, depthWrite: false, side: THREE.DoubleSide,
+        })
+        group.add(new THREE.Mesh(new THREE.SphereGeometry(sliceR, 96, 64), mat))
+        const ringPts: THREE.Vector3[] = []
+        for (let deg = 0; deg <= 360; deg += 4) ringPts.push(geoToWorld(0, deg, scene.depth_m))
+        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 2 })))
+      }).catch(() => {})
+    }
   }, [scene.depth_m, scene.variable, scene.show_model, showActiveSlice, ebkMode])
 
   // ── Background Concentric Depth Slices ─────────────────────────────────────
@@ -1426,10 +1448,18 @@ export default function OceanWorld3D({
     }
 
     const varIdx = scene.variable === 'salinity' ? 1 : scene.variable === 'current_speed' ? 2 : 0
-    const varStr = scene.variable === 'current_speed' ? 'temperature' : scene.variable
+    const isCurrentSpeed = scene.variable === 'current_speed'
 
     DEPTH_SLICES.forEach((depthM, idx) => {
-      api.modelDepthSlice(varStr, depthM, 0).then(data => {
+      const fetchPromise = isCurrentSpeed
+        ? api.modelCurrentSlice(depthM, 0).then(d => ({
+            lat: d.lat, lon: d.lon,
+            values: d.speed,
+            vmin: d.vmin, vmax: d.vmax,
+          }))
+        : api.modelDepthSlice(scene.variable, depthM, 0)
+
+      fetchPromise.then(data => {
         if (!data?.values?.length) return
         const { lat: lats, lon: lons, values } = data
         const rows = lats.length, cols = lons.length
@@ -1442,14 +1472,11 @@ export default function OceanWorld3D({
             const v = values[i]?.[j]
             buf[k++] = (v != null && isFinite(v)) ? Math.max(0, Math.min(1, (v - data.vmin) / span)) : 0
           }
-        }
 
         const tex = new THREE.DataTexture(buf, cols, rows, THREE.RedFormat, THREE.FloatType)
         tex.needsUpdate = true
 
         const sliceR = Math.max(10, GLOBE_R - depthM * DEPTH_SCALE)
-        const baseOpacity = Math.max(0.04, 0.14 - idx * 0.012)
-
         const mat = new THREE.ShaderMaterial({
           vertexShader:   SPHERE_SLICE_VERT,
           fragmentShader: SPHERE_SLICE_FRAG,
@@ -1459,15 +1486,14 @@ export default function OceanWorld3D({
             uOpacity:  { value: Math.max(0.05, 0.17 - idx * 0.015) },
             uVariable: { value: varIdx },
             uEbkMode:  { value: ebkMode === 'error' ? 1 : 0 },
-            uVmin:     { value: vmin },
-            uVmax:     { value: vmax },
+            uVmin:     { value: data.vmin },
+            uVmax:     { value: data.vmax },
           },
           transparent: true, depthWrite: false, side: THREE.DoubleSide,
         })
 
         const geo = new THREE.SphereGeometry(sliceR, 72, 48)
-        const mesh = new THREE.Mesh(geo, mat)
-        group.add(mesh)
+        group.add(new THREE.Mesh(geo, mat))
       }).catch(() => {})
     })
   }, [scene.variable, scene.show_model, showSlices, ebkMode])
@@ -2117,9 +2143,8 @@ function buildStarrySky(scene: THREE.Scene) {
         vec3 col = spaceColor + vec3(star * 0.85);
         gl_FragColor = vec4(col, 1.0);
       }`,
-    uniforms:{},
   })
-  scene.add(new THREE.Mesh(new THREE.SphereGeometry(11000, 32, 16), mat))
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(11000, 32, 16), skyMat))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

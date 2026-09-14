@@ -692,3 +692,380 @@ body {
 .btn--secondary:hover {
   background: #334155;
 }
+
+/* ─── Loading bar ──────────────────────────────────────────────────── */
+.loading-bar {
+  height: 3px;
+  background: #1e293b;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.loading-bar__fill {
+  height: 100%;
+  width: 40%;
+  background: #38bdf8;
+  border-radius: 2px;
+  animation: loading-sweep 1.4s ease-in-out infinite;
+}
+@keyframes loading-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* ─── Fade-in animation ───────────────────────────────────────────── */
+.fade-in {
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   REDESIGNED TOPBAR COMPONENTS
+══════════════════════════════════════════════════════════════════════ */
+
+/* Layout override — narrower panels for more globe space */
+:root {
+  --left-panel-width:  230px;
+  --right-panel-width: 300px;
+  --topbar-height:     48px;
+  --bottom-bar-height: 52px;
+}
+
+/* View mode switcher */
+.view-switcher {
+  display: flex;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 7px;
+  padding: 2px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.view-switcher__btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.view-switcher__btn:hover {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+.view-switcher__btn--active {
+  background: #0284c7;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 0 8px rgba(2,132,199,0.45);
+}
+
+/* Status pills in TopBar */
+.topbar__pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #1e293b;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.status-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-pill__label {
+  color: #64748b;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.status-pill__value {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+/* AI button */
+.ai-btn {
+  background: linear-gradient(135deg, #0284c7, #7c3aed);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 12px rgba(2,132,199,0.35);
+  transition: opacity 0.15s;
+}
+.ai-btn:hover { opacity: 0.85; }
+
+/* TopBar badge (right side) */
+.topbar__badge {
+  text-align: right;
+  flex-shrink: 0;
+  padding-left: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   REDESIGNED LEFT PANEL COMPONENTS
+══════════════════════════════════════════════════════════════════════ */
+
+/* Variable icon grid */
+.var-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+.var-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: #1e293b;
+  color: #94a3b8;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  gap: 3px;
+  font-size: 10px;
+}
+.var-btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+  border-color: rgba(56,189,248,0.3);
+}
+.var-btn--active {
+  background: rgba(2,132,199,0.25);
+  color: #38bdf8;
+  border-color: #38bdf8;
+  font-weight: 700;
+}
+
+/* Layer row toggle */
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: #1a2332;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.layer-row:hover { background: #243044; }
+.layer-row--on {
+  background: rgba(2,132,199,0.15);
+  border-color: rgba(56,189,248,0.35);
+}
+.layer-row__icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.layer-row__text {
+  flex: 1;
+  min-width: 0;
+}
+.layer-row__label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.layer-row--on .layer-row__label { color: #38bdf8; }
+.layer-row__sub {
+  font-size: 9.5px;
+  color: #64748b;
+  margin-top: 1px;
+}
+.layer-row__toggle {
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  background: #334155;
+  flex-shrink: 0;
+  position: relative;
+  transition: background 0.2s;
+}
+.layer-row__toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #64748b;
+  transition: transform 0.2s, background 0.2s;
+}
+.layer-row__toggle--on {
+  background: #0284c7;
+}
+.layer-row__toggle--on::after {
+  transform: translateX(12px);
+  background: #fff;
+}
+
+/* Depth bar visualization */
+.depth-bar {
+  position: relative;
+  height: 64px;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid rgba(0,212,255,0.18);
+}
+.depth-bar__fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom,
+    rgba(0,180,220,0.45) 0%,
+    rgba(0,80,160,0.65) 40%,
+    rgba(0,20,70,0.88) 100%);
+}
+.depth-bar__marker {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: #00ffff;
+  box-shadow: 0 0 6px #00ffff;
+  transition: top 0.3s ease;
+}
+.depth-bar__label {
+  position: absolute;
+  left: 5px;
+  font-size: 8px;
+  color: rgba(255,255,255,0.55);
+  font-family: var(--font-mono);
+}
+.depth-bar__label--top { top: 3px; }
+.depth-bar__label--mid { top: 40%; transform: translateY(-50%); }
+.depth-bar__label--bot { bottom: 3px; }
+.depth-bar__cur {
+  position: absolute;
+  right: 5px;
+  font-size: 8.5px;
+  color: #00ffff;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  transition: top 0.3s ease;
+}
+
+/* depth-label helper */
+.depth-label {
+  font-size: 10.5px;
+  color: #94a3b8;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   INFO BUTTON — ℹ contextual tooltips
+══════════════════════════════════════════════════════════════════════ */
+
+.info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  background: rgba(2, 132, 199, 0.15);
+  color: #38bdf8;
+  font-size: 9px;
+  font-weight: 700;
+  font-style: italic;
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: Georgia, serif;
+}
+.info-btn:hover {
+  background: rgba(2, 132, 199, 0.35);
+  border-color: #38bdf8;
+}
+
+.info-popup {
+  /* position is set inline by InfoButton (fixed + top/left calculated from getBoundingClientRect) */
+  max-width: 230px;
+  min-width: 180px;
+  background: #0d1829;
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  border-radius: 10px;
+  padding: 11px 13px;
+  box-shadow:
+    0 0 0 1px rgba(56,189,248,0.12),
+    0 12px 40px rgba(0, 0, 0, 0.75),
+    0 0 20px rgba(2, 132, 199, 0.15);
+  pointer-events: all;
+  animation: fadeIn 0.15s ease;
+}
+.info-popup__title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #38bdf8;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(56,189,248,0.2);
+  padding-right: 16px;
+}
+.info-popup__body {
+  font-size: 10.5px;
+  color: #cbd5e1;
+  line-height: 1.55;
+}
+.info-popup__close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #475569;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.info-popup__close:hover {
+  color: #94a3b8;
+  background: rgba(255,255,255,0.06);
+}
+
+/* Ensure info-btn inside panel-section__title aligns nicely */
+.panel-section__title .info-btn {
+  margin-left: 2px;
+  vertical-align: middle;
+}

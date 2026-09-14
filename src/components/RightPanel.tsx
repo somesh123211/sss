@@ -3,6 +3,7 @@ import { ArgoProfile, ComparisonData } from '../services/api'
 import { SelectedFloat } from '../types'
 import { useCesium } from '../cesium/CesiumContext'
 import ProfileChart from './ProfileChart'
+import InfoButton from './InfoButton'
 
 interface RightPanelProps {
   selectedFloat: SelectedFloat | null
@@ -50,7 +51,7 @@ export default function RightPanel({
               {[
                 { id: 'comparison', label: '⚖️ Model vs Obs' },
                 { id: 'profile', label: '📊 Depth Profile' },
-                { id: 'physics', label: '🌊 Telemetry' },
+                { id: 'physics', label: '🌡 Telemetry' },
               ].map((t) => (
                 <button
                   key={t.id}
@@ -138,17 +139,28 @@ export default function RightPanel({
                       borderRadius: 10,
                       fontSize: 11,
                       color: '#cde8f5',
-                      lineHeight: 1.6,
+                      lineHeight: 1.7,
                     }}
                   >
-                    <div style={{ color: '#00d4ff', fontWeight: 700, marginBottom: 8 }}>
-                      🌊 In-Situ Water Column Factors
+                    <div style={{ color: '#00d4ff', fontWeight: 700, marginBottom: 10, fontSize: 12 }}>
+                      🌊 In-Situ Float Metadata
                     </div>
-                    <div>Latitude: <b>{selectedFloat.latitude.toFixed(3)}°N</b></div>
-                    <div>Longitude: <b>{selectedFloat.longitude.toFixed(3)}°E</b></div>
-                    <div>Surface Temp: <b>{selectedFloat.temp_surface != null ? `${selectedFloat.temp_surface.toFixed(2)} °C` : '—'}</b></div>
-                    <div>Surface Salinity: <b>{selectedFloat.psal_surface != null ? `${selectedFloat.psal_surface.toFixed(2)} PSU` : '—'}</b></div>
-                    <div>Max Profiling Depth: <b>{selectedFloat.pres_max ?? 2000} dbar</b></div>
+                    {[
+                      { label: 'Latitude',        val: `${selectedFloat.latitude.toFixed(4)}°N` },
+                      { label: 'Longitude',       val: `${selectedFloat.longitude.toFixed(4)}°E` },
+                      { label: 'Surface Temp',    val: selectedFloat.temp_surface != null ? `${selectedFloat.temp_surface.toFixed(2)} °C` : '— (click to load)' },
+                      { label: 'Surface Salinity',val: selectedFloat.psal_surface != null ? `${selectedFloat.psal_surface.toFixed(2)} PSU` : '— (click to load)' },
+                      { label: 'Max Depth',       val: `${selectedFloat.pres_max ?? 2000} dbar` },
+                      { label: 'Profile Date',    val: new Date(selectedFloat.time).toLocaleDateString('en-IN') },
+                    ].map(row => (
+                      <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', padding: '4px 0' }}>
+                        <span style={{ color: '#64748b', fontSize: 10 }}>{row.label}</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 11 }}>{row.val}</span>
+                      </div>
+                    ))}
+                    <div style={{ marginTop: 10, fontSize: 9.5, color: '#475569', fontStyle: 'italic' }}>
+                      💡 Model telemetry loads automatically when float is selected
+                    </div>
                   </div>
                 )}
               </div>
@@ -209,7 +221,14 @@ function FloatDetails({
 }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div className="info-panel__title">Observation Details</div>
+      <div className="info-panel__title" style={{ display:'flex', alignItems:'center', gap:6 }}>
+        Observation Details
+        <InfoButton
+          content="Real measurement data from an INCOIS Argo profiling float. Each float dives to 2000 m, measures Temperature & Salinity at multiple depth levels, then surfaces and transmits data via satellite. Platform number is the float's unique World Meteorological Organisation (WMO) ID."
+          title="Argo Float Observation"
+          position="bottom"
+        />
+      </div>
       <div className="float-card fade-in" style={{ padding: '12px 14px' }}>
         <div className="float-card__header" style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div className="float-card__id" style={{ fontSize: 14, fontWeight: 700, color: '#00d4ff' }}>
@@ -444,8 +463,13 @@ function ComparisonCard({
 
   return (
     <div style={{ marginBottom: 14 }}>
-      <div className="info-panel__title" style={{ marginBottom: 8, color: '#00d4ff' }}>
+      <div className="info-panel__title" style={{ marginBottom: 8, color: '#00d4ff', display:'flex', alignItems:'center', gap:6 }}>
         MODEL vs OBSERVATION INTELLIGENCE
+        <InfoButton
+          content="This panel compares what the INCOIS numerical ocean model predicted vs what the real Argo float actually measured at the same location and time. Bias = Model − Observation. Positive bias means the model overestimates; negative means underestimates. RMSE (Root Mean Square Error) and Correlation measure overall model skill across the full depth profile."
+          title="Model vs Observation Comparison"
+          position="bottom"
+        />
       </div>
       <div
         style={{
@@ -565,13 +589,17 @@ function ComparisonCard({
             }}
           >
             <div>
-              <div style={{ color: '#8ba7bb' }}>RMSE</div>
+            <div style={{ color: '#8ba7bb' }}>RMSE
+            <InfoButton content="Root Mean Square Error — measures average error magnitude between model and observations across all depth levels. Lower RMSE = better model skill. Values below 0.5°C for temperature are considered good for operational ocean forecasting." title="RMSE" position="bottom" />
+          </div>
               <div style={{ fontWeight: 700, color: '#00d4ff', marginTop: 2, fontSize: 11 }}>
                 {stats.rmse.toFixed(3)}°C
               </div>
             </div>
             <div>
-              <div style={{ color: '#8ba7bb' }}>Mean Bias</div>
+              <div style={{ color: '#8ba7bb' }}>Mean Bias
+                <InfoButton content="Mean Bias = average of (Model − Observation) over all depth levels. Positive bias means the model consistently runs warmer/saltier than reality. A persistent positive bias in the Arabian Sea in summer indicates the model is not capturing monsoon cooling correctly." title="Mean Bias" position="bottom" />
+              </div>
               <div
                 style={{
                   fontWeight: 700,
@@ -585,7 +613,9 @@ function ComparisonCard({
               </div>
             </div>
             <div>
-              <div style={{ color: '#8ba7bb' }}>Correlation (r)</div>
+              <div style={{ color: '#8ba7bb' }}>Correlation (r)
+                <InfoButton content="Pearson correlation coefficient between model and observed vertical profiles. r=1.0 means perfect agreement in shape. r>0.95 is excellent. Low correlation means the model captures the surface well but may have wrong thermocline depth or deep water mass properties." title="Correlation Coefficient" position="bottom" />
+              </div>
               <div style={{ fontWeight: 700, color: '#ab47bc', marginTop: 2, fontSize: 11 }}>
                 {stats.correlation !== undefined && stats.correlation !== null
                   ? stats.correlation.toFixed(3)
@@ -608,38 +638,73 @@ function PointFactorDetails({ selectedObject }: { selectedObject: any }) {
   const lon = query.lon ?? selectedObject.position?.lon ?? 0
   const depthM = query.depth_m ?? selectedObject.position?.depth_m ?? 0
 
+  // API field name map: backend returns these exact keys
+  const temp   = factors.temperature    ?? factors.temperature_c    ?? null
+  const sal    = factors.salinity       ?? factors.salinity_psu     ?? null
+  const uCur   = factors.u_current      ?? factors.u                ?? null
+  const vCur   = factors.v_current      ?? factors.v                ?? null
+  const speed  = factors.current_speed  ?? factors.current_speed_ms ?? null
+  const dir    = factors.current_direction_deg ?? null
+  const density= factors.density_kg_m3  ?? null
+  const sound  = factors.sound_speed_m_s ?? factors.sound_velocity_ms ?? null
+  const o2     = factors.dissolved_o2_umol_kg ?? factors.dissolved_oxygen_umol_kg ?? null
+  const press  = factors.hydrostatic_pressure_dbar ?? depthM
+
+  const fmt = (v: number | null, dec = 2) => v != null ? v.toFixed(dec) : '—'
+
+  const rows: { label: string; value: string; color: string }[] = [
+    { label: 'Temperature',     value: `${fmt(temp)} °C`,        color: '#ff5252' },
+    { label: 'Salinity',        value: `${fmt(sal)} PSU`,         color: '#29b6f6' },
+    { label: 'Current Speed',   value: `${fmt(speed, 3)} m/s`,   color: '#00e676' },
+    { label: 'Flow Direction',  value: dir != null ? `${fmt(dir, 1)}°` : '—', color: '#69f0ae' },
+    { label: 'U (East)',        value: `${fmt(uCur, 3)} m/s`,    color: '#80cbc4' },
+    { label: 'V (North)',       value: `${fmt(vCur, 3)} m/s`,    color: '#80cbc4' },
+    { label: 'Seawater Density',value: `${fmt(density)} kg/m³`,  color: '#ffd740' },
+    { label: 'Sound Velocity',  value: `${fmt(sound, 1)} m/s`,   color: '#ffab40' },
+    { label: 'Dissolved O₂',   value: `${fmt(o2)} µmol/kg`,     color: '#ffb74d' },
+    { label: 'Pressure',        value: `${fmt(press, 1)} dbar`,  color: '#26c6da' },
+  ]
+
   return (
-    <div className="card">
+    <div className="card fade-in">
       <div className="card__header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>🌊</span>
           <div>
             <div className="card__title" style={{ fontSize: 13, color: '#00d4ff' }}>
-              {selectedObject.title || 'Water Column Point Factors'}
+              {selectedObject.title || 'Water Column Telemetry'}
             </div>
             <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 2 }}>
-              {lat.toFixed(3)}°N, {lon.toFixed(3)}°E · Depth: <b>{depthM} m</b>
+              {lat.toFixed(3)}°N · {lon.toFixed(3)}°E · {depthM} m depth
             </div>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '10px 12px' }}>
-        {[
-          { label: 'Temperature', val: `${factors.temperature_c ?? meta.temp ?? '—'} °C`, color: '#ff5252' },
-          { label: 'Salinity', val: `${factors.salinity_psu ?? meta.sal ?? '—'} PSU`, color: '#00e5ff' },
-          { label: 'Current Speed', val: `${factors.current_speed_ms ?? '—'} m/s`, color: '#00e676' },
-          { label: 'Flow Direction', val: `${factors.current_direction_deg ?? '—'}°`, color: '#69f0ae' },
-          { label: 'Seawater Density', val: `${factors.density_kg_m3 ?? '—'} kg/m³`, color: '#ffd740' },
-          { label: 'Sound Velocity', val: `${factors.sound_velocity_ms ?? '—'} m/s`, color: '#ffab40' },
-          { label: 'Dissolved O₂', val: `${factors.dissolved_oxygen_umol_kg ?? '—'} µmol/kg`, color: '#ffb74d' },
-          { label: 'Pressure', val: `${factors.pressure_dbar ?? depthM} dbar`, color: '#26c6da' },
-        ].map((item) => (
-          <div key={item.label} style={{ background: 'rgba(0,212,255,0.06)', padding: '6px 8px', borderRadius: 6, border: '1px solid rgba(0,212,255,0.12)' }}>
-            <div style={{ fontSize: 8.5, color: '#8ba7bb' }}>{item.label}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: item.color, marginTop: 2 }}>{item.val}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, padding: '10px 12px' }}>
+        {rows.map(item => (
+          <div
+            key={item.label}
+            style={{
+              background: 'rgba(0,212,255,0.05)',
+              padding: '6px 8px',
+              borderRadius: 6,
+              border: '1px solid rgba(0,212,255,0.1)',
+            }}
+          >
+            <div style={{ fontSize: 8.5, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {item.label}
+            </div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: item.color, marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+              {item.value}
+            </div>
           </div>
         ))}
+      </div>
+
+      {/* Source provenance */}
+      <div style={{ padding: '0 12px 10px', fontSize: 9, color: '#475569' }}>
+        Source: {meta.source ?? selectedObject.source ?? 'INCOIS IGORA / HYCOM'}
       </div>
     </div>
   )

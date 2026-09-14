@@ -8,27 +8,17 @@ interface TopBarProps {
   argoMeta: ArgoMetadata | null
   viewMode: ViewMode
   onViewModeChange: (mode: ViewMode) => void
-  onToggleAI?: () => void
 }
 
-const VARIABLE_LABELS: Record<string, string> = {
-  temperature: 'Temperature (°C)',
-  salinity: 'Salinity (PSU)',
-  current_speed: 'Current Speed (m/s)',
-  ssh: 'Sea Surface Height (m)',
-}
-
-export default function TopBar({ health, healthError, argoMeta, viewMode, onViewModeChange, onToggleAI }: TopBarProps) {
-  const { state } = useCesium()
+export default function TopBar({ health, healthError, argoMeta, viewMode, onViewModeChange }: TopBarProps) {
   const argoReady = health?.argo_ready
   const hycomStub = health?.hycom_stub ?? false
 
-  const modelLabel =
-    state.model_id === 'copernicus'
-      ? 'Copernicus GLORYS12V1'
-      : state.model_id === 'hycom'
-      ? 'INCOIS RSMC HYCOM'
-      : 'INCOIS IGORA'
+  const views: { id: ViewMode; icon: string; label: string }[] = [
+    { id: 'ocean3d', icon: '🌊', label: '3D Globe' },
+    { id: 'map2d',   icon: '🗺️', label: '2D Map'  },
+    { id: 'cube',    icon: '🧊', label: 'Ocean Cube' },
+  ]
 
   return (
     <header className="topbar">
@@ -36,7 +26,7 @@ export default function TopBar({ health, healthError, argoMeta, viewMode, onView
       <div className="topbar__brand">
         <div className="topbar__logo">🌊</div>
         <div>
-          <div className="topbar__title">Ocean Digital Twin</div>
+          <div className="topbar__title">SamuraTech</div>
           <div className="topbar__subtitle">INCOIS · SIH 2026 · PS 26067</div>
         </div>
       </div>
@@ -44,230 +34,63 @@ export default function TopBar({ health, healthError, argoMeta, viewMode, onView
       <div className="topbar__divider" />
 
       {/* View Mode Switcher */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          backgroundColor: 'rgba(7, 16, 34, 0.85)',
-          border: '1px solid rgba(0, 212, 255, 0.25)',
-          borderRadius: '8px',
-          padding: '2px',
-          gap: '2px',
-        }}
-      >
-        <button
-          onClick={() => onViewModeChange('ocean3d')}
-          style={{
-            padding: '5px 12px',
-            fontSize: '11px',
-            fontWeight: viewMode === 'ocean3d' ? 600 : 400,
-            color: viewMode === 'ocean3d' ? '#fff' : '#94a3b8',
-            backgroundColor: viewMode === 'ocean3d' ? '#0284c7' : 'transparent',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            transition: 'all 0.15s ease',
-            boxShadow: viewMode === 'ocean3d' ? '0 0 8px rgba(2, 132, 199, 0.5)' : 'none',
-          }}
-        >
-          <span>🌊</span> 3D Ocean World
-        </button>
-
-        <button
-          onClick={() => onViewModeChange('cesium')}
-          style={{
-            padding: '5px 12px',
-            fontSize: '11px',
-            fontWeight: viewMode === 'cesium' ? 600 : 400,
-            color: viewMode === 'cesium' ? '#fff' : '#94a3b8',
-            backgroundColor: viewMode === 'cesium' ? '#0284c7' : 'transparent',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            transition: 'all 0.15s ease',
-            boxShadow: viewMode === 'cesium' ? '0 0 8px rgba(2, 132, 199, 0.5)' : 'none',
-          }}
-        >
-          <span>🌍</span> 3D Geospatial
-        </button>
-
-        <button
-          onClick={() => onViewModeChange('map2d')}
-          style={{
-            padding: '5px 12px',
-            fontSize: '11px',
-            fontWeight: viewMode === 'map2d' ? 600 : 400,
-            color: viewMode === 'map2d' ? '#fff' : '#94a3b8',
-            backgroundColor: viewMode === 'map2d' ? '#0284c7' : 'transparent',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            transition: 'all 0.15s ease',
-            boxShadow: viewMode === 'map2d' ? '0 0 8px rgba(2, 132, 199, 0.5)' : 'none',
-          }}
-        >
-          <span>🗺️</span> 2D Map View
-        </button>
-
-        <button
-          onClick={() => onViewModeChange('cube')}
-          style={{
-            padding: '5px 12px',
-            fontSize: '11px',
-            fontWeight: viewMode === 'cube' ? 600 : 400,
-            color: viewMode === 'cube' ? '#fff' : '#94a3b8',
-            backgroundColor: viewMode === 'cube' ? '#0284c7' : 'transparent',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            transition: 'all 0.15s ease',
-            boxShadow: viewMode === 'cube' ? '0 0 8px rgba(2, 132, 199, 0.5)' : 'none',
-          }}
-        >
-          <span>🧊</span> Ocean Cube
-        </button>
-
-        <button
-          onClick={() => onViewModeChange('split')}
-          style={{
-            padding: '5px 12px',
-            fontSize: '11px',
-            fontWeight: viewMode === 'split' ? 600 : 400,
-            color: viewMode === 'split' ? '#fff' : '#94a3b8',
-            backgroundColor: viewMode === 'split' ? '#0284c7' : 'transparent',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            transition: 'all 0.15s ease',
-            boxShadow: viewMode === 'split' ? '0 0 8px rgba(2, 132, 199, 0.5)' : 'none',
-          }}
-        >
-          <span>◫</span> Split View
-        </button>
+      <div className="view-switcher">
+        {views.map(v => (
+          <button
+            key={v.id}
+            className={`view-switcher__btn ${viewMode === v.id ? 'view-switcher__btn--active' : ''}`}
+            onClick={() => onViewModeChange(v.id)}
+          >
+            <span>{v.icon}</span>
+            {v.label}
+          </button>
+        ))}
       </div>
 
-      {/* Status Indicators */}
-      <div className="topbar__indicators">
-        {/* Backend */}
-        <StatusIndicator
+      <div className="topbar__divider" />
+
+      {/* Data Source Status Pills */}
+      <div className="topbar__pills">
+        <StatusPill
+          dot={healthError ? 'error' : health ? 'ok' : 'warn'}
           label="API"
-          value={healthError ? 'Offline' : health ? 'Online' : 'Connecting...'}
-          status={healthError ? 'error' : health ? 'ok' : 'warn'}
+          value={healthError ? 'Offline' : health ? 'Online' : '…'}
         />
-
-        <div className="topbar__divider" />
-
-        {/* Argo */}
-        <StatusIndicator
-          label="INCOIS ARGO"
-          value={
-            argoReady
-              ? `${argoMeta?.total_profiles?.toLocaleString() ?? '—'} profiles`
-              : 'Not Ready'
-          }
-          status={argoReady ? 'ok' : 'warn'}
+        <StatusPill
+          dot={argoReady ? 'ok' : 'warn'}
+          label="Argo Floats"
+          value={argoReady ? `${argoMeta?.total_profiles?.toLocaleString() ?? '—'} profiles` : 'Loading'}
         />
-
-        {/* Model */}
-        <StatusIndicator
-          label="OCEAN MODEL"
-          value={hycomStub ? `${modelLabel} (Stub)` : `${modelLabel} (Active)`}
-          status={hycomStub ? 'stub' : 'ok'}
+        <StatusPill
+          dot={hycomStub ? 'warn' : 'ok'}
+          label="Ocean Model"
+          value={hycomStub ? 'HYCOM (Stub)' : 'IGORA Active'}
         />
-
-        {/* Glider */}
-        <StatusIndicator
-          label="GLIDERS"
-          value={health?.glider_ready ? 'IFREMER / INCOIS (Bay of Bengal)' : 'Not Ready'}
-          status={health?.glider_ready ? 'ok' : 'warn'}
-        />
-
-        {/* GEBCO */}
-        <StatusIndicator
-          label="BATHYMETRY"
-          value={health?.gebco_ready ? 'GEBCO (30 arc-sec grid)' : 'Not Ready'}
-          status={health?.gebco_ready ? 'ok' : 'warn'}
-        />
-
-        <div className="topbar__divider" />
-
-        {/* Current view state */}
-        <StatusIndicator
-          label="VARIABLE"
-          value={VARIABLE_LABELS[state.variable] ?? state.variable}
-          status="ok"
-        />
-        <StatusIndicator
-          label="DEPTH"
-          value={state.depth_m === 0 ? 'Surface' : `${state.depth_m} m`}
-          status="ok"
+        <StatusPill
+          dot={health?.glider_ready ? 'ok' : 'warn'}
+          label="Gliders"
+          value={health?.glider_ready ? 'Bay of Bengal' : 'Not Ready'}
         />
       </div>
 
       <div className="topbar__spacer" />
 
-      {/* AI Assistant Button */}
-      {onToggleAI && (
-        <button
-          onClick={onToggleAI}
-          style={{
-            backgroundColor: '#0284c7',
-            color: '#fff',
-            border: '1px solid rgba(56, 189, 248, 0.4)',
-            borderRadius: '8px',
-            padding: '6px 14px',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            marginRight: '16px',
-            boxShadow: '0 0 12px rgba(2, 132, 199, 0.4)',
-          }}
-        >
-          ✨ Ask GPT-6 Astra
-        </button>
-      )}
-
-      {/* Platform info */}
-      <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textAlign: 'right' }}>
-        <div style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>
-          Ministry of Earth Sciences
-        </div>
-        <div>Indian National Centre for Ocean Information Services</div>
+      {/* MoES Badge */}
+      <div className="topbar__badge">
+        <div style={{ fontWeight: 700, color: '#e2e8f0', fontSize: 10 }}>MoES / INCOIS</div>
+        <div style={{ color: '#64748b', fontSize: 9 }}>Ministry of Earth Sciences</div>
       </div>
     </header>
   )
 }
 
-interface StatusIndicatorProps {
-  label: string
-  value: string
-  status: 'ok' | 'warn' | 'error' | 'stub'
-}
-
-function StatusIndicator({ label, value, status }: StatusIndicatorProps) {
+function StatusPill({ dot, label, value }: { dot: 'ok' | 'warn' | 'error'; label: string; value: string }) {
+  const colors: Record<string, string> = { ok: '#10b981', warn: '#f59e0b', error: '#ef4444' }
   return (
-    <div className={`status-indicator status-indicator--${status}`}>
-      <div className="status-indicator__dot" />
-      <span style={{ color: 'var(--color-text-muted)', fontSize: 10 }}>{label}:</span>
-      <span style={{ fontWeight: 500 }}>{value}</span>
+    <div className="status-pill">
+      <span className="status-pill__dot" style={{ background: colors[dot] }} />
+      <span className="status-pill__label">{label}</span>
+      <span className="status-pill__value">{value}</span>
     </div>
   )
 }
