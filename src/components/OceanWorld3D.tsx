@@ -734,7 +734,14 @@ export default function OceanWorld3D({
   const mouseRef     = useRef(new THREE.Vector2())
   const keysRef      = useRef<Record<string, boolean>>({})
   const underwaterRef= useRef(false)
-  const flyTargetRef = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null)
+  const flightRef    = useRef<{
+    startPos: THREE.Vector3
+    endPos: THREE.Vector3
+    startTarget: THREE.Vector3
+    endTarget: THREE.Vector3
+    startTime: number
+    duration: number
+  } | null>(null)
 
   // HUD and Live Continuous Depth Physics state
   const [hud, setHud] = useState({ lat: 15.0, lon: 75.0, depthM: 0, altitude: 1200, radius: 2200 })
@@ -804,11 +811,11 @@ export default function OceanWorld3D({
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.target.set(0, 0, 0)
     controls.enableDamping = true
-    controls.dampingFactor = 0.05
+    controls.dampingFactor = 0.08
     controls.minDistance = 150     // Can dive deep into the ocean
     controls.maxDistance = 6000    // High global orbital altitude
-    controls.rotateSpeed = 0.7
-    controls.zoomSpeed = 1.3
+    controls.rotateSpeed = 0.85
+    controls.zoomSpeed = 1.35
     controlsRef.current = controls
 
     // ── Lighting ──────────────────────────────────────────────────────
@@ -936,21 +943,25 @@ export default function OceanWorld3D({
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup',   onKeyUp)
 
-    // ── Click handler for point factor telemetry ──────────────────────
-    const onClick = (e: MouseEvent) => {
-      const rect = mount.getBoundingClientRect()
-      mouseRef.current.set(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1
-      )
-      raycasterRef.current.setFromCamera(mouseRef.current, camera)
-      const hits = raycasterRef.current.intersectObjects(floatGrp.children, true)
-      if (hits.length > 0) {
-        const f = (hits[0].object as any).userData?.float as ArgoFloat
-        if (f) onFloatSelect({ platform_number: f.platform_number, cycle_number: f.cycle_number, latitude: f.latitude, longitude: f.longitude, time: f.time })
+    // ── Pointer down/up handler (distinguishes drag vs click) ────────
+    let downPos = { x: 0, y: 0, time: 0 }
+    const onMouseDown = (e: MouseEvent) => {
+      downPos = { x: e.clientX, y: e.clientY, time: performance.now() }
+    }
+    const onMouseUp = (e: MouseEvent) => {
+      const dist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y)
+      const duration = performance.now() - downPos.time
+      if (dist < 6 && duration < 350) {
+        const rect = mount.getBoundingClientRect()
+        mouseRef.current.set(
+          ((e.clientX - rect.left) / rect.width) * 2 - 1,
+          -((e.clientY - rect.top) / rect.height) * 2 + 1
+        )
+        handleClick()
       }
     }
-    renderer.domElement.addEventListener('click', onClick)
+    renderer.domElement.addEventListener('mousedown', onMouseDown)
+    renderer.domElement.addEventListener('mouseup', onMouseUp)
 
     // ── Resize handler ────────────────────────────────────────────────
     const onResize = () => {
@@ -969,14 +980,30 @@ export default function OceanWorld3D({
       const cam = cameraRef.current!
       const ctrl= controlsRef.current!
 
-      // Smooth preset camera flying interpolation
-      if (flyTargetRef.current) {
-        cam.position.lerp(flyTargetRef.current.pos, 0.05)
-        ctrl.target.lerp(flyTargetRef.current.target, 0.05)
-        if (cam.position.distanceTo(flyTargetRef.current.pos) < 3.0) {
-          cam.position.copy(flyTargetRef.current.pos)
-          ctrl.target.copy(flyTargetRef.current.target)
-          flyTargetRef.current = null
+      // Silky-Smooth Spherical Globe Slerp Flight Interpolation
+      if (flightRef.current) {
+        const flight = flightRef.current
+        const elapsed = (performance.now() - flight.startTime) / flight.duration
+        if (elapsed >= 1.0) {
+          cam.position.copy(flight.endPos)
+          ctrl.target.copy(flight.endTarget)
+          flightRef.current = null
+        } else {
+          // Smooth sinusoidal ease-in-out
+          const ease = 0.5 - Math.cos(elapsed * Math.PI) / 2
+          const startDir = flight.startPos.clone().normalize()
+          const endDir = flight.endPos.clone().normalize()
+          const startR = flight.startPos.length()
+          const endR = flight.endPos.length()
+
+          const qStart = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), startDir)
+          const qEnd = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), endDir)
+          const qCur = new THREE.Quaternion().slerpQuaternions(qStart, qEnd, ease)
+
+          const curDir = new THREE.Vector3(0, 0, 1).applyQuaternion(qCur)
+          const curR = THREE.MathUtils.lerp(startR, endR, ease)
+          cam.position.copy(curDir.multiplyScalar(curR))
+          ctrl.target.lerpVectors(flight.startTarget, flight.endTarget, ease)
         }
       } else {
         // Keyboard fly controls
@@ -1094,7 +1121,8 @@ export default function OceanWorld3D({
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup',   onKeyUp)
       window.removeEventListener('resize',  onResize)
-      renderer.domElement.removeEventListener('click', onClick)
+      renderer.domElement.removeEventListener('mousedown', onMouseDown)
+      renderer.domElement.removeEventListener('mouseup', onMouseUp)
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
       if (cssRend.domElement.parentNode  === mount) mount.removeChild(cssRend.domElement)
@@ -1131,6 +1159,24 @@ export default function OceanWorld3D({
     }
   }
 
+  // ── Smooth Spherical Globe Flight Animation ─────────────────────────────
+  const smoothFlyTo = useCallback((targetLat: number, targetLon: number, altitude = 1600, targetCenter = new THREE.Vector3(0, 0, 0), duration = 900) => {
+    const cam = cameraRef.current
+    const ctrl = controlsRef.current
+    if (!cam || !ctrl) return
+
+    const depthOffset = -(altitude - GLOBE_R)
+    const endPos = geoToWorld(targetLat, targetLon, depthOffset)
+    flightRef.current = {
+      startPos: cam.position.clone(),
+      endPos,
+      startTarget: ctrl.target.clone(),
+      endTarget: targetCenter.clone(),
+      startTime: performance.now(),
+      duration,
+    }
+  }, [])
+
   // ── Click Raycast for Point Factors & Float Selection ───────────────────
   const handleClick = useCallback(() => {
     const cam     = cameraRef.current
@@ -1155,6 +1201,9 @@ export default function OceanWorld3D({
             longitude:       f.longitude,
             time:            f.time,
           })
+          const curDist = Math.max(1300, Math.min(2400, cam.position.length()))
+          smoothFlyTo(f.latitude, f.longitude, curDist, new THREE.Vector3(0, 0, 0), 950)
+
           setInspectLoading(true)
           api.modelPoint(f.latitude, f.longitude, scene.depth_m || 0).then(res => {
             setInspectedPoint(res)
@@ -1183,6 +1232,9 @@ export default function OceanWorld3D({
       const pt = oceanHit.point
       const geo = worldToGeo(pt.x, pt.y, pt.z)
       const targetDepth = scene.depth_m > 0 ? scene.depth_m : geo.depthM
+      const curDist = Math.max(1300, Math.min(2400, cam.position.length()))
+      smoothFlyTo(geo.lat, geo.lon, curDist, new THREE.Vector3(0, 0, 0), 950)
+
       setInspectLoading(true)
       api.modelPoint(geo.lat, geo.lon, targetDepth).then(res => {
         setInspectedPoint(res)
@@ -1196,43 +1248,25 @@ export default function OceanWorld3D({
         })
       }).catch(() => {}).finally(() => setInspectLoading(false))
     }
-  }, [onFloatSelect, scene.depth_m, showFloats, setSelectedObject])
+  }, [onFloatSelect, scene.depth_m, showFloats, setSelectedObject, smoothFlyTo])
 
   // ── Camera Navigation Presets (Smooth Interpolated Flight) ───────────────
   const flyToPreset = (mode: 'orbit' | 'basin' | 'surface' | 'mixed' | 'thermo' | 'abyss') => {
     if (mode === 'orbit') {
-      // High orbital view over Indian Ocean
-      const p = geoToWorld(10, 75, -1400)
-      const t = new THREE.Vector3(0, 0, 0)
-      flyTargetRef.current = { pos: p, target: t }
+      smoothFlyTo(10, 75, 2400, new THREE.Vector3(0, 0, 0), 1200)
     } else if (mode === 'basin') {
-      // Zoomed on India & Arabian Sea / Bay of Bengal
-      const p = geoToWorld(15, 78, -450)
-      const t = geoToWorld(15, 78, 0)
-      flyTargetRef.current = { pos: p, target: t }
+      smoothFlyTo(15, 78, 1450, new THREE.Vector3(0, 0, 0), 1000)
     } else if (mode === 'surface') {
-      // Skimming ocean surface
-      const p = geoToWorld(12, 77, -10)
-      const t = geoToWorld(12, 80, 0)
-      flyTargetRef.current = { pos: p, target: t }
+      smoothFlyTo(12, 77, 1010, geoToWorld(12, 80, 0), 1000)
       if (onDepthChange) onDepthChange(0)
     } else if (mode === 'mixed') {
-      // Subsurface mixed layer (50m depth)
-      const p = geoToWorld(12, 77, 50)
-      const t = geoToWorld(12, 80, 50)
-      flyTargetRef.current = { pos: p, target: t }
+      smoothFlyTo(12, 77, 950, geoToWorld(12, 80, 50), 1000)
       if (onDepthChange) onDepthChange(50)
     } else if (mode === 'thermo') {
-      // Subsurface thermocline (250m depth)
-      const p = geoToWorld(12, 77, 250)
-      const t = geoToWorld(12, 80, 250)
-      flyTargetRef.current = { pos: p, target: t }
+      smoothFlyTo(12, 77, 750, geoToWorld(12, 80, 250), 1000)
       if (onDepthChange) onDepthChange(250)
     } else if (mode === 'abyss') {
-      // Deep abyssal floor (2000m depth)
-      const p = geoToWorld(12, 77, 2000)
-      const t = geoToWorld(12, 80, 2000)
-      flyTargetRef.current = { pos: p, target: t }
+      smoothFlyTo(12, 77, 400, geoToWorld(12, 80, 2000), 1200)
       if (onDepthChange) onDepthChange(2000)
     }
   }

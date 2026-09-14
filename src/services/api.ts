@@ -202,6 +202,8 @@ export interface OceanPointFactors {
     ssh: number | null
     density_kg_m3: number | null
     sound_speed_m_s: number | null
+    dissolved_o2_umol_kg?: number | null
+    hydrostatic_pressure_dbar?: number | null
     layer_name: string
     layer_desc: string
   }
