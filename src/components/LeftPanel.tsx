@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { OceanVariable, ModelSourceId } from '../cesium/types'
+import { OceanVariable } from '../cesium/types'
 import { ArgoMetadata } from '../services/api'
 import { useCesium } from '../cesium/CesiumContext'
 import InfoButton from './InfoButton'
@@ -37,7 +37,7 @@ const INFO = {
   modelSource:
     'The Numerical Ocean Model is a supercomputer simulation of the Indian Ocean. INCOIS IGORA is India\'s own model. HYCOM (Hybrid Coordinate Ocean Model) is US Navy\'s global model. Copernicus GLORYS12V1 is the EU reanalysis. These models solve ocean physics equations on a 3D grid every few hours.',
   depthSlice:
-    'The ocean is divided into depth layers — Surface (0 m), mixed layer (~0–100 m), thermocline (~100–500 m), and deep water (>500 m). Selecting a depth "slices" the 3D model field at that level, like a CT-scan of the ocean. This is the core 3D visualization capability of SamuraTech.',
+    'The ocean is divided into depth layers — Surface (0 m), mixed layer (~0–100 m), thermocline (~100–500 m), and deep water (>500 m). Selecting a depth "slices" the 3D model field at that level, like a CT-scan of the ocean. This is the core 3D visualization capability of SamudraTech.',
   argoFloats:
     'Argo profiling floats are autonomous underwater robots deployed by INCOIS and partner agencies. Each float sinks to 2000 m, drifts with currents, then rises while measuring Temperature and Salinity — transmitting data via satellite. INCOIS has 13,148+ real profiles in their ERDDAP database covering 2018–2025.',
   gliders:
@@ -53,42 +53,34 @@ const INFO = {
 }
 
 export default function LeftPanel({ argoMeta }: LeftPanelProps) {
-  const { state, setVariable, setDepth, setLayerVisibility, updateState } = useCesium()
+  const { state, setVariable, setDepth, setLayerVisibility } = useCesium()
 
   return (
     <aside className="left-panel">
 
       {/* ── 1. Numerical Ocean Model ─────────────────────────────── */}
       <Section title="Ocean Model Source" info={INFO.modelSource}>
-        <select
-          id="model-source-select"
-          className="control-select"
-          value={state.model_id}
-          onChange={e => updateState({ model_id: e.target.value as ModelSourceId })}
-        >
-          <option value="igora">INCOIS IGORA (Live)</option>
-          <option value="hycom">INCOIS HYCOM (NetCDF)</option>
-          <option value="copernicus">Copernicus GLORYS12V1</option>
-        </select>
+        <div className="model-badge">
+          <span className="model-badge__dot" />
+          <span className="model-badge__name">INCOIS IGORA</span>
+          <span className="model-badge__status">Live</span>
+        </div>
       </Section>
 
       {/* ── 2. Ocean Variable ────────────────────────────────────── */}
       <Section title="Ocean Variable" info="Select which ocean parameter to visualize in 3D. Each variable comes from the numerical model output (NetCDF) and can be compared against real Argo float observations.">
         <div className="var-grid">
           {VARIABLES.map(v => (
-            <div key={v.value} style={{ position: 'relative' }}>
-              <button
-                className={`var-btn ${state.variable === v.value ? 'var-btn--active' : ''}`}
-                onClick={() => setVariable(v.value as OceanVariable)}
-                title={v.label}
-              >
-                <span style={{ fontSize: 14 }}>{v.icon}</span>
-                <span style={{ fontSize: 9, marginTop: 2 }}>{v.label.split(' ')[0]}</span>
-              </button>
-              <div style={{ position: 'absolute', top: 2, right: 2, zIndex: 2 }}>
-                <InfoButton content={v.info} title={v.label} position="right" />
-              </div>
-            </div>
+            <button
+              key={v.value}
+              id={`var-btn-${v.value}`}
+              className={`var-btn ${state.variable === v.value ? 'var-btn--active' : ''}`}
+              onClick={() => setVariable(v.value as OceanVariable)}
+              title={v.info}
+            >
+              <span className="var-btn__icon">{v.icon}</span>
+              <span className="var-btn__label">{v.label.split(' ')[0]}</span>
+            </button>
           ))}
         </div>
         <div className="depth-label" style={{ marginTop: 6 }}>
@@ -178,26 +170,6 @@ export default function LeftPanel({ argoMeta }: LeftPanelProps) {
           onToggle={() => setLayerVisibility('model_error', !state.layers.model_error)}
           info={INFO.modelBiasMap}
         />
-      </Section>
-
-      {/* ── 6. Display Options ──────────────────────────────────── */}
-      <Section title="Display Options" info="Visual rendering settings for the 3D scene.">
-        <div className="control-group">
-          <div className="control-label" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            Vertical Exaggeration
-            <InfoButton content={INFO.vertExag} title="Vertical Exaggeration" position="right" />
-          </div>
-          <input
-            id="vert-exag-slider"
-            type="range"
-            className="control-slider"
-            min={1} max={10} step={1}
-            value={state.vertical_exaggeration}
-            style={{ '--slider-pct': `${((state.vertical_exaggeration - 1) / 9) * 100}%` } as React.CSSProperties}
-            onChange={e => updateState({ vertical_exaggeration: Number(e.target.value) })}
-          />
-          <div className="control-value">{state.vertical_exaggeration}× depth scale</div>
-        </div>
       </Section>
 
     </aside>

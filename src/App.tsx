@@ -6,7 +6,6 @@ import TopBar from './components/TopBar'
 import LeftPanel from './components/LeftPanel'
 import RightPanel from './components/RightPanel'
 import BottomBar from './components/BottomBar'
-import AIChatModal from './components/AIChatModal'
 import OceanWorld3D from './components/OceanWorld3D'
 import OceanMapView from './components/OceanMapView'
 import OceanCubeScene from './components/OceanCubeScene'
@@ -23,14 +22,11 @@ interface BBox {
 
 function MainApp() {
   const { state, setDepth, setVariable, setTimeIndex, setSelectedObject } = useCesium()
-  const [viewMode, setViewMode] = useState<ViewMode>('ocean3d')
+  const [viewMode, setViewMode] = useState<ViewMode>('cube')
 
   // ── Backend health ──────────────────────────────────────────────
   const [health, setHealth] = useState<HealthStatus | null>(null)
   const [healthError, setHealthError] = useState(false)
-
-  // ── AI Assistant Drawer ─────────────────────────────────────────
-  const [isAIChatOpen, setIsAIChatOpen] = useState(false)
 
   // ── Dataset metadata ────────────────────────────────────────────
   const [argoMeta, setArgoMeta] = useState<ArgoMetadata | null>(null)
@@ -374,13 +370,6 @@ function MainApp() {
         hycomStub={health?.hycom_stub ?? false}
       />
       <BottomBar argoMeta={argoMeta} />
-
-      {/* GPT-6 Astra Chat Drawer */}
-      <AIChatModal
-        isOpen={isAIChatOpen}
-        onClose={() => setIsAIChatOpen(false)}
-        selectedFloat={selectedFloat}
-      />
     </div>
   )
 }

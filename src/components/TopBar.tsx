@@ -12,7 +12,6 @@ interface TopBarProps {
 
 export default function TopBar({ health, healthError, argoMeta, viewMode, onViewModeChange }: TopBarProps) {
   const argoReady = health?.argo_ready
-  const hycomStub = health?.hycom_stub ?? false
 
   const views: { id: ViewMode; icon: string; label: string }[] = [
     { id: 'ocean3d', icon: '🌊', label: '3D Globe' },
@@ -26,7 +25,7 @@ export default function TopBar({ health, healthError, argoMeta, viewMode, onView
       <div className="topbar__brand">
         <div className="topbar__logo">🌊</div>
         <div>
-          <div className="topbar__title">SamuraTech</div>
+          <div className="topbar__title">SamudraTech</div>
           <div className="topbar__subtitle">INCOIS · SIH 2026 · PS 26067</div>
         </div>
       </div>
@@ -52,19 +51,9 @@ export default function TopBar({ health, healthError, argoMeta, viewMode, onView
       {/* Data Source Status Pills */}
       <div className="topbar__pills">
         <StatusPill
-          dot={healthError ? 'error' : health ? 'ok' : 'warn'}
-          label="API"
-          value={healthError ? 'Offline' : health ? 'Online' : '…'}
-        />
-        <StatusPill
           dot={argoReady ? 'ok' : 'warn'}
           label="Argo Floats"
           value={argoReady ? `${argoMeta?.total_profiles?.toLocaleString() ?? '—'} profiles` : 'Loading'}
-        />
-        <StatusPill
-          dot={hycomStub ? 'warn' : 'ok'}
-          label="Ocean Model"
-          value={hycomStub ? 'HYCOM (Stub)' : 'IGORA Active'}
         />
         <StatusPill
           dot={health?.glider_ready ? 'ok' : 'warn'}
