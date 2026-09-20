@@ -456,12 +456,20 @@ function ComparisonCard({
   comparison: ComparisonData | null
   selectedFloat: SelectedFloat | null
 }) {
-  // Use real measured temp_surface from positions parquet (reliable)
-  // Fall back to profile data only if temp_surface unavailable
-  const surfaceObs = selectedFloat?.temp_surface ?? profile?.data?.temp?.[0]
-  const modelInterp = comparison?.model?.interpolated_at_argo_depths?.[0]
-  const hycomVal = typeof modelInterp === 'number' ? modelInterp : null
-  const diff = surfaceObs !== undefined && surfaceObs !== null && hycomVal !== null ? hycomVal - surfaceObs : null
+  // Pull real Argo surface temp from comparison API (not from synthetic fallback profile)
+  const argoTemps = comparison?.argo?.['temperature'] as number[] | undefined
+  const argoDepths = comparison?.argo?.depths
+
+  // Use first non-null value from comparison.argo.temperature
+  const surfaceObs = argoTemps?.[0] ?? selectedFloat?.temp_surface ?? undefined
+
+  // Use first non-null interpolated model value
+  const interpArr = comparison?.model?.interpolated_at_argo_depths ?? []
+  const firstValidIdx = interpArr.findIndex((v) => typeof v === 'number')
+  const hycomVal = firstValidIdx >= 0 ? (interpArr[firstValidIdx] as number) : null
+
+  // Depth label for the comparison point
+  const compDepth = argoDepths?.[firstValidIdx >= 0 ? firstValidIdx : 0] ?? 0
 
   const stats = comparison?.stats
 
@@ -495,7 +503,7 @@ function ComparisonCard({
             alignItems: 'center',
           }}
         >
-          <span>Surface Water Temperature</span>
+          <span>Temperature @ {compDepth} m depth</span>
           <span
             style={{
               fontSize: 9,
