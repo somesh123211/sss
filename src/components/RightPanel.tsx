@@ -456,20 +456,31 @@ function ComparisonCard({
   comparison: ComparisonData | null
   selectedFloat: SelectedFloat | null
 }) {
-  // Pull real Argo surface temp from comparison API (not from synthetic fallback profile)
+  const { state } = useCesium()
+  const selectedDepth = state.depth_m ?? 0
+
+  // Pull real Argo temps from comparison API
   const argoTemps = comparison?.argo?.['temperature'] as number[] | undefined
-  const argoDepths = comparison?.argo?.depths
+  const argoDepths = comparison?.argo?.depths ?? []
 
-  // Use first non-null value from comparison.argo.temperature
-  const surfaceObs = argoTemps?.[0] ?? selectedFloat?.temp_surface ?? undefined
+  // Find the index in Argo depths closest to the user's selected depth
+  const closestIdx = argoDepths.length > 0
+    ? argoDepths.reduce((bestIdx, d, i) =>
+        Math.abs(d - selectedDepth) < Math.abs(argoDepths[bestIdx] - selectedDepth) ? i : bestIdx
+      , 0)
+    : 0
 
-  // Use first non-null interpolated model value
+  // Argo observed temperature at selected depth
+  const surfaceObs = argoTemps?.[closestIdx] ?? selectedFloat?.temp_surface ?? undefined
+
+  // Model interpolated value at selected depth
   const interpArr = comparison?.model?.interpolated_at_argo_depths ?? []
-  const firstValidIdx = interpArr.findIndex((v) => typeof v === 'number')
-  const hycomVal = firstValidIdx >= 0 ? (interpArr[firstValidIdx] as number) : null
+  const hycomVal = typeof interpArr[closestIdx] === 'number'
+    ? (interpArr[closestIdx] as number)
+    : null
 
-  // Depth label for the comparison point
-  const compDepth = argoDepths?.[firstValidIdx >= 0 ? firstValidIdx : 0] ?? 0
+  // Actual depth being shown
+  const compDepth = argoDepths[closestIdx] ?? selectedDepth
 
   const stats = comparison?.stats
 
