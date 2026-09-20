@@ -547,14 +547,14 @@ function ComparisonCard({
           <div
             style={{
               background:
-                diff !== null
-                  ? diff > 0
+                stats?.mean_bias != null
+                  ? stats.mean_bias > 0
                     ? 'rgba(255,82,82,0.1)'
                     : 'rgba(0,230,118,0.1)'
                   : 'rgba(255,255,255,0.05)',
               border: `1px solid ${
-                diff !== null
-                  ? diff > 0
+                stats?.mean_bias != null
+                  ? stats.mean_bias > 0
                     ? 'rgba(255,82,82,0.3)'
                     : 'rgba(0,230,118,0.3)'
                   : 'rgba(255,255,255,0.1)'
@@ -570,10 +570,12 @@ function ComparisonCard({
               style={{
                 fontSize: 14,
                 fontWeight: 700,
-                color: diff !== null ? (diff > 0 ? '#ff5252' : '#00e676') : '#8ba7bb',
+                color: stats?.mean_bias != null ? (stats.mean_bias > 0 ? '#ff5252' : '#00e676') : '#8ba7bb',
               }}
             >
-              {diff !== null ? `${diff > 0 ? '+' : ''}${diff.toFixed(2)}°C` : '—'}
+              {stats?.mean_bias != null
+                ? `${stats.mean_bias > 0 ? '+' : ''}${stats.mean_bias.toFixed(2)}°C`
+                : '—'}
             </div>
           </div>
         </div>
