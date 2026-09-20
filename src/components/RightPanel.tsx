@@ -555,14 +555,14 @@ function ComparisonCard({
           <div
             style={{
               background:
-                stats?.mean_bias != null
-                  ? stats.mean_bias > 0
+                hycomVal !== null && surfaceObs !== undefined
+                  ? (hycomVal - (surfaceObs as number)) > 0
                     ? 'rgba(255,82,82,0.1)'
                     : 'rgba(0,230,118,0.1)'
                   : 'rgba(255,255,255,0.05)',
               border: `1px solid ${
-                stats?.mean_bias != null
-                  ? stats.mean_bias > 0
+                hycomVal !== null && surfaceObs !== undefined
+                  ? (hycomVal - (surfaceObs as number)) > 0
                     ? 'rgba(255,82,82,0.3)'
                     : 'rgba(0,230,118,0.3)'
                   : 'rgba(255,255,255,0.1)'
@@ -578,11 +578,16 @@ function ComparisonCard({
               style={{
                 fontSize: 14,
                 fontWeight: 700,
-                color: stats?.mean_bias != null ? (stats.mean_bias > 0 ? '#ff5252' : '#00e676') : '#8ba7bb',
+                color: hycomVal !== null && surfaceObs !== undefined
+                  ? (hycomVal - (surfaceObs as number)) > 0 ? '#ff5252' : '#00e676'
+                  : '#8ba7bb',
               }}
             >
-              {stats?.mean_bias != null
-                ? `${stats.mean_bias > 0 ? '+' : ''}${stats.mean_bias.toFixed(2)}°C`
+              {hycomVal !== null && surfaceObs !== undefined
+                ? (() => {
+                    const d = hycomVal - (surfaceObs as number)
+                    return `${d > 0 ? '+' : ''}${d.toFixed(2)}°C`
+                  })()
                 : '—'}
             </div>
           </div>
