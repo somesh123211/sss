@@ -19,12 +19,11 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: {
-          'vendor-react':   ['react', 'react-dom'],
-          'vendor-three':   ['three'],
-          'vendor-cesium':  ['cesium'],
-          'vendor-maplibre':['maplibre-gl'],
-          'vendor-deck':    ['deck.gl', '@deck.gl/react', '@deck.gl/layers'],
-          'vendor-charts':  ['recharts'],
+          'vendor-react':    ['react', 'react-dom'],
+          'vendor-three':    ['three'],
+          'vendor-maplibre': ['maplibre-gl'],
+          'vendor-deck':     ['deck.gl', '@deck.gl/react', '@deck.gl/layers'],
+          'vendor-charts':   ['recharts'],
         },
       },
     },
