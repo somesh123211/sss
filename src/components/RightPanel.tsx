@@ -82,7 +82,7 @@ export default function RightPanel({
             {/* TAB 1: MODEL VS OBSERVATION COMPARISON */}
             {activeTab === 'comparison' && (
               <div>
-                <ComparisonCard profile={profile} comparison={comparison} />
+                <ComparisonCard profile={profile} comparison={comparison} selectedFloat={selectedFloat} />
                 {profile && !profileLoading && (
                   <ProfileChart profile={profile} comparison={comparison} />
                 )}
@@ -450,14 +450,18 @@ function ProfileError({ error }: { error: string }) {
 function ComparisonCard({
   profile,
   comparison,
+  selectedFloat,
 }: {
   profile: ArgoProfile | null
   comparison: ComparisonData | null
+  selectedFloat: SelectedFloat | null
 }) {
-  const surfaceObs = profile?.data?.temp?.[0]
+  // Use real measured temp_surface from positions parquet (reliable)
+  // Fall back to profile data only if temp_surface unavailable
+  const surfaceObs = selectedFloat?.temp_surface ?? profile?.data?.temp?.[0]
   const modelInterp = comparison?.model?.interpolated_at_argo_depths?.[0]
   const hycomVal = typeof modelInterp === 'number' ? modelInterp : null
-  const diff = surfaceObs !== undefined && hycomVal !== null ? hycomVal - surfaceObs : null
+  const diff = surfaceObs !== undefined && surfaceObs !== null && hycomVal !== null ? hycomVal - surfaceObs : null
 
   const stats = comparison?.stats
 
