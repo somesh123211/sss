@@ -14,19 +14,8 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    sourcemap: mode !== 'production',
-    chunkSizeWarningLimit: 6000,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'vendor-react':    ['react', 'react-dom'],
-          'vendor-three':    ['three'],
-          'vendor-maplibre': ['maplibre-gl'],
-          'vendor-deck':     ['deck.gl', '@deck.gl/react', '@deck.gl/layers'],
-          'vendor-charts':   ['recharts'],
-        },
-      },
-    },
+    sourcemap: false,
+    chunkSizeWarningLimit: 8000,
   },
   optimizeDeps: {
     include: [
