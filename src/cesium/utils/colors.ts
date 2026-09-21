@@ -18,21 +18,22 @@ export const THERMAL_SCALE: ColorStop[] = [
 ]
 
 /**
- * Standard cmocean haline colormap for salinity (PSU)
- * More stops for smooth gradients in the narrow ocean salinity range (~31-37 PSU)
+ * Perceptually smooth haline colormap for ocean salinity (PSU)
+ * Range: 28–38 PSU covers both BoB (low ~29-32) and Arabian Sea (high ~35-37)
+ * Colours go teal-blue → cyan-teal → seafoam → olive-yellow (no jarring dark-navy→yellow jump)
  */
 export const HALINE_SCALE: ColorStop[] = [
-  { stop: 0.0,  color: [18,  28,  80,  255] },  // Very low salinity (fresh/river)
-  { stop: 0.1,  color: [22,  50,  105, 255] },
-  { stop: 0.2,  color: [30,  80,  130, 255] },
-  { stop: 0.3,  color: [42,  115, 145, 255] },
-  { stop: 0.4,  color: [60,  148, 148, 255] },
-  { stop: 0.5,  color: [85,  170, 140, 255] },
-  { stop: 0.6,  color: [118, 188, 125, 255] },
-  { stop: 0.7,  color: [162, 200, 112, 255] },
-  { stop: 0.8,  color: [200, 210, 115, 255] },
-  { stop: 0.9,  color: [228, 225, 155, 255] },
-  { stop: 1.0,  color: [250, 240, 200, 255] },  // High salinity (Arabian Sea)
+  { stop: 0.00, color: [38,  70,  120, 255] },  // ~28 PSU — very fresh (river plumes)
+  { stop: 0.10, color: [42,  95,  140, 255] },  // ~29 PSU
+  { stop: 0.20, color: [48,  125, 155, 255] },  // ~30 PSU — BoB coastal
+  { stop: 0.30, color: [56,  155, 165, 255] },  // ~31 PSU
+  { stop: 0.40, color: [70,  175, 165, 255] },  // ~32 PSU — open BoB
+  { stop: 0.50, color: [95,  185, 155, 255] },  // ~33 PSU — transition zone
+  { stop: 0.60, color: [130, 195, 140, 255] },  // ~34 PSU
+  { stop: 0.70, color: [168, 200, 118, 255] },  // ~35 PSU — Arabian Sea edge
+  { stop: 0.80, color: [205, 205, 100, 255] },  // ~36 PSU — Arabian Sea core
+  { stop: 0.90, color: [232, 218, 130, 255] },  // ~37 PSU
+  { stop: 1.00, color: [250, 235, 170, 255] },  // ~38 PSU — hypersaline
 ]
 
 /**
@@ -75,6 +76,13 @@ export function sampleColormap(
   palette: ColorStop[]
 ): [number, number, number, number] {
   if (isNaN(value) || value === null) return [0, 0, 0, 0]
+  if (palette === HALINE_SCALE) {
+    // Fixed bounds covering full Indian Ocean range:
+    // BoB surface can be as low as 28 PSU (river plumes), Arabian Sea ~37-38 PSU.
+    // Wider range prevents low-salinity BoB values from clipping at the dark end.
+    vmin = 28.0
+    vmax = 38.0
+  }
   const clamped = Math.max(vmin, Math.min(vmax, value))
   const norm = vmax === vmin ? 0.5 : (clamped - vmin) / (vmax - vmin)
 
