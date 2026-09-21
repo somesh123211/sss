@@ -20,20 +20,20 @@ export const THERMAL_SCALE: ColorStop[] = [
 /**
  * Perceptually smooth haline colormap for ocean salinity (PSU)
  * Range: 28–38 PSU covers both BoB (low ~29-32) and Arabian Sea (high ~35-37)
- * Colours go teal-blue → cyan-teal → seafoam → olive-yellow (no jarring dark-navy→yellow jump)
+ * Uses lighter blues/cyans throughout so even low-salinity BoB looks vibrant, not dark
  */
 export const HALINE_SCALE: ColorStop[] = [
-  { stop: 0.00, color: [38,  70,  120, 255] },  // ~28 PSU — very fresh (river plumes)
-  { stop: 0.10, color: [42,  95,  140, 255] },  // ~29 PSU
-  { stop: 0.20, color: [48,  125, 155, 255] },  // ~30 PSU — BoB coastal
-  { stop: 0.30, color: [56,  155, 165, 255] },  // ~31 PSU
-  { stop: 0.40, color: [70,  175, 165, 255] },  // ~32 PSU — open BoB
-  { stop: 0.50, color: [95,  185, 155, 255] },  // ~33 PSU — transition zone
-  { stop: 0.60, color: [130, 195, 140, 255] },  // ~34 PSU
-  { stop: 0.70, color: [168, 200, 118, 255] },  // ~35 PSU — Arabian Sea edge
-  { stop: 0.80, color: [205, 205, 100, 255] },  // ~36 PSU — Arabian Sea core
-  { stop: 0.90, color: [232, 218, 130, 255] },  // ~37 PSU
-  { stop: 1.00, color: [250, 235, 170, 255] },  // ~38 PSU — hypersaline
+  { stop: 0.00, color: [60,  130, 190, 255] },  // ~28 PSU — fresh (cornflower blue)
+  { stop: 0.10, color: [55,  150, 190, 255] },  // ~29 PSU
+  { stop: 0.20, color: [55,  168, 185, 255] },  // ~30 PSU — BoB open ocean
+  { stop: 0.30, color: [62,  180, 175, 255] },  // ~31 PSU
+  { stop: 0.40, color: [75,  188, 165, 255] },  // ~32 PSU — transition
+  { stop: 0.50, color: [100, 192, 152, 255] },  // ~33 PSU
+  { stop: 0.60, color: [135, 195, 135, 255] },  // ~34 PSU
+  { stop: 0.70, color: [170, 198, 108, 255] },  // ~35 PSU — Arabian Sea edge
+  { stop: 0.80, color: [205, 200,  85, 255] },  // ~36 PSU — Arabian Sea core
+  { stop: 0.90, color: [232, 215, 100, 255] },  // ~37 PSU
+  { stop: 1.00, color: [250, 230, 140, 255] },  // ~38 PSU — hypersaline
 ]
 
 /**

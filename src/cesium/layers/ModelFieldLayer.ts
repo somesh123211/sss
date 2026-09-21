@@ -150,7 +150,7 @@ export class ModelFieldLayer {
     rawCtx.putImageData(imgData, 0, 0)
 
     // Apply blur on final canvas using CSS filter (works with drawImage)
-    ctx.filter = 'blur(6px)'
+    ctx.filter = 'blur(12px)'
     ctx.drawImage(rawCanvas, 0, 0)
     ctx.filter = 'none'
 
