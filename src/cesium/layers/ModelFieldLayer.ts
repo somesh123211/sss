@@ -140,7 +140,19 @@ export class ModelFieldLayer {
         pixels[pixelIdx + 3] = Math.round(a * 0.85)
       }
     }
-    ctx.putImageData(imgData, 0, 0)
+
+    // Draw raw data to an intermediate canvas, then composite with blur
+    // onto the final canvas to smooth sharp ocean fronts / data boundaries.
+    const rawCanvas = document.createElement('canvas')
+    rawCanvas.width = CANVAS_W
+    rawCanvas.height = CANVAS_H
+    const rawCtx = rawCanvas.getContext('2d')!
+    rawCtx.putImageData(imgData, 0, 0)
+
+    // Apply blur on final canvas using CSS filter (works with drawImage)
+    ctx.filter = 'blur(6px)'
+    ctx.drawImage(rawCanvas, 0, 0)
+    ctx.filter = 'none'
 
     // Dispose old primitive
     if (this.primitive && !this.viewer.scene.isDestroyed()) {
