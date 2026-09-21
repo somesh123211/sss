@@ -81,33 +81,60 @@ export class ModelFieldLayer {
       vmax = data.vmax ?? 1.5
     }
 
+    const CANVAS_W = 512
+    const CANVAS_H = 384
     const canvas = document.createElement('canvas')
-    canvas.width = nLon
-    canvas.height = nLat
+    canvas.width = CANVAS_W
+    canvas.height = CANVAS_H
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const imgData = ctx.createImageData(nLon, nLat)
+    const imgData = ctx.createImageData(CANVAS_W, CANVAS_H)
     const pixels = imgData.data
 
-    for (let i = 0; i < nLat; i++) {
-      const row = nLat - 1 - i // Invert Y for canvas
-      for (let j = 0; j < nLon; j++) {
-        const val = data.values[row]?.[j]
-        const pixelIdx = (i * nLon + j) * 4
-        if (val === null || val === undefined || isNaN(val)) {
-          // Land or missing value
-          pixels[pixelIdx] = 0
-          pixels[pixelIdx + 1] = 0
-          pixels[pixelIdx + 2] = 0
-          pixels[pixelIdx + 3] = 0
-        } else {
-          const [r, g, b, a] = sampleColormap(val, vmin, vmax, palette)
-          pixels[pixelIdx] = r
-          pixels[pixelIdx + 1] = g
-          pixels[pixelIdx + 2] = b
-          pixels[pixelIdx + 3] = Math.round(a * 0.85)
+    for (let py = 0; py < CANVAS_H; py++) {
+      for (let px = 0; px < CANVAS_W; px++) {
+        // Map canvas pixel to fractional grid coordinates
+        const fi = (CANVAS_H - 1 - py) / (CANVAS_H - 1) * (nLat - 1)  // lat axis (flip Y)
+        const fj = px / (CANVAS_W - 1) * (nLon - 1)                     // lon axis
+
+        // Bilinear interpolation corners
+        const i0 = Math.floor(fi), i1 = Math.min(i0 + 1, nLat - 1)
+        const j0 = Math.floor(fj), j1 = Math.min(j0 + 1, nLon - 1)
+        const ti = fi - i0,        tj = fj - j0
+
+        const v00 = data.values[i0]?.[j0]
+        const v01 = data.values[i0]?.[j1]
+        const v10 = data.values[i1]?.[j0]
+        const v11 = data.values[i1]?.[j1]
+
+        // Collect valid neighbours for interpolation
+        const vals = [v00, v01, v10, v11]
+        const valid = vals.filter(v => v !== null && v !== undefined && !isNaN(v as number)) as number[]
+
+        const pixelIdx = (py * CANVAS_W + px) * 4
+        if (valid.length === 0) {
+          pixels[pixelIdx + 3] = 0  // transparent (land/missing)
+          continue
         }
+
+        let val: number
+        if (valid.length === 4) {
+          // Full bilinear interpolation
+          val = (v00 as number) * (1 - ti) * (1 - tj) +
+                (v01 as number) * (1 - ti) * tj +
+                (v10 as number) * ti * (1 - tj) +
+                (v11 as number) * ti * tj
+        } else {
+          // Partial — use mean of valid neighbours
+          val = valid.reduce((a, b) => a + b, 0) / valid.length
+        }
+
+        const [r, g, b, a] = sampleColormap(val, vmin, vmax, palette)
+        pixels[pixelIdx]     = r
+        pixels[pixelIdx + 1] = g
+        pixels[pixelIdx + 2] = b
+        pixels[pixelIdx + 3] = Math.round(a * 0.85)
       }
     }
     ctx.putImageData(imgData, 0, 0)
