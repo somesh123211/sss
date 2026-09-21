@@ -90,9 +90,40 @@ export class ModelFieldLayer {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // ── Step 1: Bilinear-interpolate raw data → float buffer at canvas resolution ──
+    // ── Step 1: Inpaint land at GRID level (salinity only) ───────────────────
+    // At 31×46 grid resolution, India is only ~2-4 cells wide → 20 passes fills it fully.
+    // This lets AS values (high PSU) flow through India to meet BoB (low PSU).
+    let gridValues = data.values as (number | null)[][]
+
+    if (this.variable === 'salinity') {
+      // Copy grid to a mutable float array
+      let g: (number | null)[][] = gridValues.map(row => [...row])
+      for (let pass = 0; pass < 20; pass++) {
+        const next = g.map(row => [...row]) as (number | null)[][]
+        for (let i = 0; i < nLat; i++) {
+          for (let j = 0; j < nLon; j++) {
+            if (g[i][j] !== null && g[i][j] !== undefined) continue  // ocean — skip
+            let sum = 0, cnt = 0
+            for (let di = -1; di <= 1; di++) {
+              for (let dj = -1; dj <= 1; dj++) {
+                if (di === 0 && dj === 0) continue
+                const ni = i + di, nj = j + dj
+                if (ni < 0 || ni >= nLat || nj < 0 || nj >= nLon) continue
+                const v = g[ni][nj]
+                if (v !== null && v !== undefined) { sum += v as number; cnt++ }
+              }
+            }
+            if (cnt > 0) next[i][j] = sum / cnt
+          }
+        }
+        g = next
+      }
+      gridValues = g
+    }
+
+    // ── Step 2: Interpolate inpainted grid → float buffer at canvas resolution ─
     const floatBuf = new Float32Array(CANVAS_W * CANVAS_H)
-    const maskBuf  = new Uint8Array(CANVAS_W * CANVAS_H)   // 0=land/missing, 1=ocean
+    const maskBuf  = new Uint8Array(CANVAS_W * CANVAS_H)
 
     for (let py = 0; py < CANVAS_H; py++) {
       for (let px = 0; px < CANVAS_W; px++) {
@@ -102,115 +133,97 @@ export class ModelFieldLayer {
         const j0 = Math.floor(fj), j1 = Math.min(j0 + 1, nLon - 1)
         const ti = fi - i0, tj = fj - j0
 
-        const v00 = data.values[i0]?.[j0]
-        const v01 = data.values[i0]?.[j1]
-        const v10 = data.values[i1]?.[j0]
-        const v11 = data.values[i1]?.[j1]
+        // Use ORIGINAL data for land mask (not inpainted)
+        const o00 = data.values[i0]?.[j0]
+        const o01 = data.values[i0]?.[j1]
+        const o10 = data.values[i1]?.[j0]
+        const o11 = data.values[i1]?.[j1]
+        const origValid = [o00, o01, o10, o11].filter(v => v !== null && v !== undefined && !isNaN(v as number))
 
-        const vals = [v00, v01, v10, v11]
-        const valid = vals.filter(v => v !== null && v !== undefined && !isNaN(v as number)) as number[]
         const idx = py * CANVAS_W + px
-
-        if (valid.length === 0) {
-          floatBuf[idx] = NaN
-          maskBuf[idx] = 0
-          continue
-        }
-        maskBuf[idx] = 1
-        if (valid.length === 4) {
-          floatBuf[idx] = (v00 as number) * (1 - ti) * (1 - tj) +
-                          (v01 as number) * (1 - ti) * tj +
-                          (v10 as number) * ti * (1 - tj) +
-                          (v11 as number) * ti * tj
+        if (origValid.length === 0) {
+          maskBuf[idx] = 0  // pure land — stay transparent
         } else {
-          floatBuf[idx] = valid.reduce((a, b) => a + b, 0) / valid.length
+          maskBuf[idx] = 1  // ocean (even partial)
+        }
+
+        // Use INPAINTED grid for actual values (so blur can cross India)
+        const v00 = gridValues[i0]?.[j0]
+        const v01 = gridValues[i0]?.[j1]
+        const v10 = gridValues[i1]?.[j0]
+        const v11 = gridValues[i1]?.[j1]
+        const vals = [v00, v01, v10, v11].filter(v => v !== null && v !== undefined) as number[]
+
+        if (vals.length === 4) {
+          floatBuf[idx] = (v00 as number) * (1-ti)*(1-tj) + (v01 as number) * (1-ti)*tj +
+                          (v10 as number) * ti*(1-tj)     + (v11 as number) * ti*tj
+        } else if (vals.length > 0) {
+          floatBuf[idx] = vals.reduce((a, b) => a + b, 0) / vals.length
+        } else {
+          floatBuf[idx] = NaN
         }
       }
     }
 
-    // ── Step 2: Heavy box-blur on float buffer (salinity only) ──
-    // Blur at 512×384 resolution is FAR more effective than the old 31×46 grid smooth.
-    // radius=20 across 4 passes spreads the AS/BoB front over ~160 pixels.
+    // ── Step 3: Box-blur the FULL float buffer (salinity only) ───────────────
+    // Since land is now filled, the blur propagates AS↔BoB values freely.
     const blurRadius = this.variable === 'salinity' ? 20 : 0
     const blurPasses = this.variable === 'salinity' ? 4 : 0
 
     let src = floatBuf
     for (let pass = 0; pass < blurPasses; pass++) {
       const dst = new Float32Array(CANVAS_W * CANVAS_H)
-      // Horizontal pass
       for (let y = 0; y < CANVAS_H; y++) {
         let sum = 0, count = 0
-        // seed the window
         for (let x = 0; x <= blurRadius && x < CANVAS_W; x++) {
-          const i = y * CANVAS_W + x
-          if (maskBuf[i]) { sum += src[i]; count++ }
+          const v = src[y * CANVAS_W + x]; if (!isNaN(v)) { sum += v; count++ }
         }
         for (let x = 0; x < CANVAS_W; x++) {
           const i = y * CANVAS_W + x
-          if (maskBuf[i] && count > 0) {
-            dst[i] = sum / count
-          } else {
-            dst[i] = src[i]
-          }
-          // slide window right
-          const addX = x + blurRadius + 1
-          if (addX < CANVAS_W) {
-            const ai = y * CANVAS_W + addX
-            if (maskBuf[ai]) { sum += src[ai]; count++ }
-          }
-          const remX = x - blurRadius
-          if (remX >= 0) {
-            const ri = y * CANVAS_W + remX
-            if (maskBuf[ri]) { sum -= src[ri]; count-- }
-          }
+          dst[i] = count > 0 ? sum / count : (isNaN(src[i]) ? NaN : src[i])
+          const ax = x + blurRadius + 1; if (ax < CANVAS_W) { const v = src[y*CANVAS_W+ax]; if(!isNaN(v)){sum+=v;count++} }
+          const rx = x - blurRadius;     if (rx >= 0)       { const v = src[y*CANVAS_W+rx]; if(!isNaN(v)){sum-=v;count--} }
         }
       }
-      // Vertical pass
       const dst2 = new Float32Array(CANVAS_W * CANVAS_H)
       for (let x = 0; x < CANVAS_W; x++) {
         let sum = 0, count = 0
         for (let y = 0; y <= blurRadius && y < CANVAS_H; y++) {
-          const i = y * CANVAS_W + x
-          if (maskBuf[i]) { sum += dst[i]; count++ }
+          const v = dst[y * CANVAS_W + x]; if (!isNaN(v)) { sum += v; count++ }
         }
         for (let y = 0; y < CANVAS_H; y++) {
           const i = y * CANVAS_W + x
-          if (maskBuf[i] && count > 0) {
-            dst2[i] = sum / count
-          } else {
-            dst2[i] = dst[i]
-          }
-          const addY = y + blurRadius + 1
-          if (addY < CANVAS_H) {
-            const ai = addY * CANVAS_W + x
-            if (maskBuf[ai]) { sum += dst[ai]; count++ }
-          }
-          const remY = y - blurRadius
-          if (remY >= 0) {
-            const ri = remY * CANVAS_W + x
-            if (maskBuf[ri]) { sum -= dst[ri]; count-- }
-          }
+          dst2[i] = count > 0 ? sum / count : (isNaN(dst[i]) ? NaN : dst[i])
+          const ay = y + blurRadius + 1; if (ay < CANVAS_H) { const v = dst[ay*CANVAS_W+x]; if(!isNaN(v)){sum+=v;count++} }
+          const ry = y - blurRadius;     if (ry >= 0)       { const v = dst[ry*CANVAS_W+x]; if(!isNaN(v)){sum-=v;count--} }
         }
       }
       src = dst2
     }
 
-    // ── Step 3: Colormap the smoothed float buffer ──
-    const imgData = ctx.createImageData(CANVAS_W, CANVAS_H)
+    // ── Step 4: Colormap — restore original land mask ─────────────────────────
+    // Render colormap to a temp canvas
+    const rawCanvas = document.createElement('canvas')
+    rawCanvas.width = CANVAS_W; rawCanvas.height = CANVAS_H
+    const rawCtx = rawCanvas.getContext('2d')!
+    const imgData = rawCtx.createImageData(CANVAS_W, CANVAS_H)
     const pixels = imgData.data
     for (let i = 0; i < CANVAS_W * CANVAS_H; i++) {
       const pixelIdx = i * 4
-      if (!maskBuf[i]) {
-        pixels[pixelIdx + 3] = 0
-        continue
-      }
+      if (!maskBuf[i]) { pixels[pixelIdx + 3] = 0; continue }
       const [r, g, b, a] = sampleColormap(src[i], vmin, vmax, palette)
-      pixels[pixelIdx]     = r
-      pixels[pixelIdx + 1] = g
-      pixels[pixelIdx + 2] = b
-      pixels[pixelIdx + 3] = Math.round(a * 0.85)
+      pixels[pixelIdx] = r; pixels[pixelIdx+1] = g; pixels[pixelIdx+2] = b
+      pixels[pixelIdx+3] = Math.round(a * 0.88)
     }
-    ctx.putImageData(imgData, 0, 0)
+    rawCtx.putImageData(imgData, 0, 0)
+
+    // Composite with blur onto final canvas — smooths coastline edges
+    const blurPx = this.variable === 'salinity' ? 25 : 0
+    if (blurPx > 0) {
+      ctx.filter = `blur(${blurPx}px)`
+    }
+    ctx.drawImage(rawCanvas, 0, 0)
+    ctx.filter = 'none'
 
     // Dispose old primitive
     if (this.primitive && !this.viewer.scene.isDestroyed()) {

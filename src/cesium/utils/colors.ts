@@ -18,22 +18,21 @@ export const THERMAL_SCALE: ColorStop[] = [
 ]
 
 /**
- * Perceptually smooth haline colormap for ocean salinity (PSU)
- * Range: 28–38 PSU covers both BoB (low ~29-32) and Arabian Sea (high ~35-37)
- * Uses lighter blues/cyans throughout so even low-salinity BoB looks vibrant, not dark
+ * Perceptual teal-to-indigo salinity colormap tuned for real Indian Ocean HYCOM data.
+ * Real data range: 33.4–37.1 PSU. Bounds set to 33–37.5 PSU.
+ * Uses full colormap width → more color variation, smooth gradient, no jarring jump.
  */
 export const HALINE_SCALE: ColorStop[] = [
-  { stop: 0.00, color: [60,  130, 190, 255] },  // ~28 PSU — fresh (cornflower blue)
-  { stop: 0.10, color: [55,  150, 190, 255] },  // ~29 PSU
-  { stop: 0.20, color: [55,  168, 185, 255] },  // ~30 PSU — BoB open ocean
-  { stop: 0.30, color: [62,  180, 175, 255] },  // ~31 PSU
-  { stop: 0.40, color: [75,  188, 165, 255] },  // ~32 PSU — transition
-  { stop: 0.50, color: [100, 192, 152, 255] },  // ~33 PSU
-  { stop: 0.60, color: [135, 195, 135, 255] },  // ~34 PSU
-  { stop: 0.70, color: [170, 198, 108, 255] },  // ~35 PSU — Arabian Sea edge
-  { stop: 0.80, color: [205, 200,  85, 255] },  // ~36 PSU — Arabian Sea core
-  { stop: 0.90, color: [232, 215, 100, 255] },  // ~37 PSU
-  { stop: 1.00, color: [250, 230, 140, 255] },  // ~38 PSU — hypersaline
+  { stop: 0.00, color: [140, 230, 240, 255] },  // 33.0 PSU — fresh coastal, bright sky-cyan
+  { stop: 0.15, color: [90,  210, 225, 255] },  // 33.7 PSU
+  { stop: 0.28, color: [55,  190, 210, 255] },  // 34.3 PSU — central Indian Ocean
+  { stop: 0.42, color: [30,  170, 190, 255] },  // 34.9 PSU
+  { stop: 0.55, color: [20,  148, 168, 255] },  // 35.5 PSU — transition zone
+  { stop: 0.67, color: [18,  120, 145, 255] },  // 36.0 PSU
+  { stop: 0.78, color: [20,   95, 125, 255] },  // 36.5 PSU — Arabian Sea
+  { stop: 0.88, color: [25,   70, 108, 255] },  // 37.0 PSU — high salinity AS
+  { stop: 0.95, color: [30,   50,  95, 255] },  // 37.3 PSU
+  { stop: 1.00, color: [35,   35,  85, 255] },  // 37.5 PSU — hypersaline deep indigo
 ]
 
 /**
@@ -77,11 +76,10 @@ export function sampleColormap(
 ): [number, number, number, number] {
   if (isNaN(value) || value === null) return [0, 0, 0, 0]
   if (palette === HALINE_SCALE) {
-    // Fixed bounds covering full Indian Ocean range:
-    // BoB surface can be as low as 28 PSU (river plumes), Arabian Sea ~37-38 PSU.
-    // Wider range prevents low-salinity BoB values from clipping at the dark end.
-    vmin = 28.0
-    vmax = 38.0
+    // Tight bounds matching REAL HYCOM Indian Ocean surface salinity: 33.4–37.1 PSU.
+    // Using the full colormap width over just 4.5 PSU gives much richer colour variation.
+    vmin = 33.0
+    vmax = 37.5
   }
   const clamped = Math.max(vmin, Math.min(vmax, value))
   const norm = vmax === vmin ? 0.5 : (clamped - vmin) / (vmax - vmin)
