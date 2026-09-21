@@ -3176,38 +3176,7 @@ export default function OceanCubeScene({
         </div>
       )}
 
-      {/* Top-Left Status HUD with Season and Disaster Active Dates */}
-      <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 20, display: 'flex', flexDirection: 'column', gap: 5, pointerEvents: 'none' }}>
-        {[
-          { k: 'VIEW', v: '3D Ocean Terrain & Multi-Depth Twin', hi: true },
-          { k: 'REGION', v: `${region.lat_min}–${region.lat_max}°N  ${region.lon_min}–${region.lon_max}°E` },
-          { k: 'SEASON', v: `${SEASONS_META[season].name.split(' (')[0].toUpperCase()} (${SEASONS_META[season].months})`, hi: true },
-          { k: 'DISASTER', v: disaster === 'none' ? 'NORMAL CLIMATOLOGY' : `${DISASTERS_META[disaster].name.split(' (')[0].toUpperCase()} (${DISASTERS_META[disaster].dateRange})`, warn: disaster !== 'none' },
-          { k: 'EXAGG', v: `${vertExaggeration.toFixed(1)}x relief` },
-          { k: 'DEPTH', v: depthM === 0 ? 'Surface (0 m)' : `${depthM} m depth slice` },
-          { k: 'SCALE', v: `${scaleMode.toUpperCase()} [${customMin} to ${customMax} ${defaultBounds.unit}]`, hi: true },
-          { k: 'PALETTE', v: PALETTE_DEFS[palette]?.name.split(' (')[0].toUpperCase() || 'TURBO' },
-        ].map(({ k, v, hi, warn }) => (
-          <div
-            key={k}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              borderRadius: 4,
-              backdropFilter: 'blur(6px)',
-              background: warn ? 'rgba(255,82,82,0.2)' : hi ? 'rgba(0,212,255,0.15)' : 'rgba(6,12,26,0.85)',
-              border: `1px solid ${warn ? '#ff5252' : hi ? 'rgba(0,212,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
-              fontSize: 10,
-              fontFamily: 'JetBrains Mono,monospace',
-            }}
-          >
-            <span style={{ color: '#8ba7bb' }}>{k}:</span>
-            <span style={{ color: warn ? '#ff8a80' : hi ? '#00d4ff' : '#dceeff', fontWeight: 600 }}>{v}</span>
-          </div>
-        ))}
-      </div>
+
 
       {/* Depth Slicer Controller */}
       {scene.show_model && (
