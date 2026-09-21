@@ -73,8 +73,11 @@ export class ModelFieldLayer {
 
     if (this.variable === 'salinity') {
       palette = HALINE_SCALE
-      vmin = data.vmin ?? 32
-      vmax = data.vmax ?? 37
+      // Use fixed oceanographic range for Indian Ocean salinity (PSU).
+      // Dynamic per-tile min/max stretches the full palette over tiny variations,
+      // causing jarring colour jumps. Fixed bounds give a stable, comparable view.
+      vmin = 31.5
+      vmax = 37.5
     } else if (this.variable === 'current_speed') {
       palette = SPEED_SCALE
       vmin = data.vmin ?? 0

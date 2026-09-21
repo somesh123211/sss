@@ -19,13 +19,20 @@ export const THERMAL_SCALE: ColorStop[] = [
 
 /**
  * Standard cmocean haline colormap for salinity (PSU)
+ * More stops for smooth gradients in the narrow ocean salinity range (~31-37 PSU)
  */
 export const HALINE_SCALE: ColorStop[] = [
-  { stop: 0.0, color: [20, 30, 80, 255] },
-  { stop: 0.3, color: [50, 110, 140, 255] },
-  { stop: 0.6, color: [100, 180, 130, 255] },
-  { stop: 0.85, color: [210, 210, 120, 255] },
-  { stop: 1.0, color: [250, 240, 200, 255] },
+  { stop: 0.0,  color: [18,  28,  80,  255] },  // Very low salinity (fresh/river)
+  { stop: 0.1,  color: [22,  50,  105, 255] },
+  { stop: 0.2,  color: [30,  80,  130, 255] },
+  { stop: 0.3,  color: [42,  115, 145, 255] },
+  { stop: 0.4,  color: [60,  148, 148, 255] },
+  { stop: 0.5,  color: [85,  170, 140, 255] },
+  { stop: 0.6,  color: [118, 188, 125, 255] },
+  { stop: 0.7,  color: [162, 200, 112, 255] },
+  { stop: 0.8,  color: [200, 210, 115, 255] },
+  { stop: 0.9,  color: [228, 225, 155, 255] },
+  { stop: 1.0,  color: [250, 240, 200, 255] },  // High salinity (Arabian Sea)
 ]
 
 /**
