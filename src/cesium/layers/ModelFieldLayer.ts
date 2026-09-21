@@ -73,15 +73,47 @@ export class ModelFieldLayer {
 
     if (this.variable === 'salinity') {
       palette = HALINE_SCALE
-      // Use fixed oceanographic range for Indian Ocean salinity (PSU).
-      // Dynamic per-tile min/max stretches the full palette over tiny variations,
-      // causing jarring colour jumps. Fixed bounds give a stable, comparable view.
-      vmin = 31.5
-      vmax = 37.5
+      // Fixed bounds: sampleColormap overrides to 28-38 PSU internally
+      vmin = 28.0
+      vmax = 38.0
     } else if (this.variable === 'current_speed') {
       palette = SPEED_SCALE
       vmin = data.vmin ?? 0
       vmax = data.vmax ?? 1.5
+    }
+
+    // ── Data-space Gaussian smoothing ─────────────────────────────────────
+    // Smooth the raw values grid BEFORE colormap sampling so ocean fronts
+    // (like the Arabian Sea/BoB salinity boundary) fade gradually in value
+    // space rather than snapping between two colours.
+    // Salinity gets more passes (3) because its front is sharper.
+    const smoothPasses = this.variable === 'salinity' ? 3 : 0
+    let smoothedValues = data.values as (number | null)[][]
+
+    for (let pass = 0; pass < smoothPasses; pass++) {
+      const out: (number | null)[][] = Array.from({ length: nLat }, (_, i) =>
+        Array.from({ length: nLon }, (_, j) => {
+          const v00 = smoothedValues[i]?.[j]
+          if (v00 === null || v00 === undefined) return null  // land stays land
+
+          // 5×5 weighted box filter — only average ocean neighbours
+          const kernel = 2  // radius
+          let sum = 0, weight = 0
+          for (let di = -kernel; di <= kernel; di++) {
+            for (let dj = -kernel; dj <= kernel; dj++) {
+              const ni = i + di, nj = j + dj
+              if (ni < 0 || ni >= nLat || nj < 0 || nj >= nLon) continue
+              const nv = smoothedValues[ni]?.[nj]
+              if (nv === null || nv === undefined) continue
+              const w = 1 / (1 + Math.abs(di) + Math.abs(dj))  // distance weight
+              sum += (nv as number) * w
+              weight += w
+            }
+          }
+          return weight > 0 ? sum / weight : v00
+        })
+      )
+      smoothedValues = out
     }
 
     const CANVAS_W = 512
@@ -106,10 +138,10 @@ export class ModelFieldLayer {
         const j0 = Math.floor(fj), j1 = Math.min(j0 + 1, nLon - 1)
         const ti = fi - i0,        tj = fj - j0
 
-        const v00 = data.values[i0]?.[j0]
-        const v01 = data.values[i0]?.[j1]
-        const v10 = data.values[i1]?.[j0]
-        const v11 = data.values[i1]?.[j1]
+        const v00 = smoothedValues[i0]?.[j0]
+        const v01 = smoothedValues[i0]?.[j1]
+        const v10 = smoothedValues[i1]?.[j0]
+        const v11 = smoothedValues[i1]?.[j1]
 
         // Collect valid neighbours for interpolation
         const vals = [v00, v01, v10, v11]
