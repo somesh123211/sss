@@ -82,40 +82,6 @@ export class ModelFieldLayer {
       vmax = data.vmax ?? 1.5
     }
 
-    // ── Data-space Gaussian smoothing ─────────────────────────────────────
-    // Smooth the raw values grid BEFORE colormap sampling so ocean fronts
-    // (like the Arabian Sea/BoB salinity boundary) fade gradually in value
-    // space rather than snapping between two colours.
-    // Salinity gets more passes (3) because its front is sharper.
-    const smoothPasses = this.variable === 'salinity' ? 3 : 0
-    let smoothedValues = data.values as (number | null)[][]
-
-    for (let pass = 0; pass < smoothPasses; pass++) {
-      const out: (number | null)[][] = Array.from({ length: nLat }, (_, i) =>
-        Array.from({ length: nLon }, (_, j) => {
-          const v00 = smoothedValues[i]?.[j]
-          if (v00 === null || v00 === undefined) return null  // land stays land
-
-          // 5×5 weighted box filter — only average ocean neighbours
-          const kernel = 2  // radius
-          let sum = 0, weight = 0
-          for (let di = -kernel; di <= kernel; di++) {
-            for (let dj = -kernel; dj <= kernel; dj++) {
-              const ni = i + di, nj = j + dj
-              if (ni < 0 || ni >= nLat || nj < 0 || nj >= nLon) continue
-              const nv = smoothedValues[ni]?.[nj]
-              if (nv === null || nv === undefined) continue
-              const w = 1 / (1 + Math.abs(di) + Math.abs(dj))  // distance weight
-              sum += (nv as number) * w
-              weight += w
-            }
-          }
-          return weight > 0 ? sum / weight : v00
-        })
-      )
-      smoothedValues = out
-    }
-
     const CANVAS_W = 512
     const CANVAS_H = 384
     const canvas = document.createElement('canvas')
@@ -124,67 +90,127 @@ export class ModelFieldLayer {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const imgData = ctx.createImageData(CANVAS_W, CANVAS_H)
-    const pixels = imgData.data
+    // ── Step 1: Bilinear-interpolate raw data → float buffer at canvas resolution ──
+    const floatBuf = new Float32Array(CANVAS_W * CANVAS_H)
+    const maskBuf  = new Uint8Array(CANVAS_W * CANVAS_H)   // 0=land/missing, 1=ocean
 
     for (let py = 0; py < CANVAS_H; py++) {
       for (let px = 0; px < CANVAS_W; px++) {
-        // Map canvas pixel to fractional grid coordinates
-        const fi = (CANVAS_H - 1 - py) / (CANVAS_H - 1) * (nLat - 1)  // lat axis (flip Y)
-        const fj = px / (CANVAS_W - 1) * (nLon - 1)                     // lon axis
-
-        // Bilinear interpolation corners
+        const fi = (CANVAS_H - 1 - py) / (CANVAS_H - 1) * (nLat - 1)
+        const fj = px / (CANVAS_W - 1) * (nLon - 1)
         const i0 = Math.floor(fi), i1 = Math.min(i0 + 1, nLat - 1)
         const j0 = Math.floor(fj), j1 = Math.min(j0 + 1, nLon - 1)
-        const ti = fi - i0,        tj = fj - j0
+        const ti = fi - i0, tj = fj - j0
 
-        const v00 = smoothedValues[i0]?.[j0]
-        const v01 = smoothedValues[i0]?.[j1]
-        const v10 = smoothedValues[i1]?.[j0]
-        const v11 = smoothedValues[i1]?.[j1]
+        const v00 = data.values[i0]?.[j0]
+        const v01 = data.values[i0]?.[j1]
+        const v10 = data.values[i1]?.[j0]
+        const v11 = data.values[i1]?.[j1]
 
-        // Collect valid neighbours for interpolation
         const vals = [v00, v01, v10, v11]
         const valid = vals.filter(v => v !== null && v !== undefined && !isNaN(v as number)) as number[]
+        const idx = py * CANVAS_W + px
 
-        const pixelIdx = (py * CANVAS_W + px) * 4
         if (valid.length === 0) {
-          pixels[pixelIdx + 3] = 0  // transparent (land/missing)
+          floatBuf[idx] = NaN
+          maskBuf[idx] = 0
           continue
         }
-
-        let val: number
+        maskBuf[idx] = 1
         if (valid.length === 4) {
-          // Full bilinear interpolation
-          val = (v00 as number) * (1 - ti) * (1 - tj) +
-                (v01 as number) * (1 - ti) * tj +
-                (v10 as number) * ti * (1 - tj) +
-                (v11 as number) * ti * tj
+          floatBuf[idx] = (v00 as number) * (1 - ti) * (1 - tj) +
+                          (v01 as number) * (1 - ti) * tj +
+                          (v10 as number) * ti * (1 - tj) +
+                          (v11 as number) * ti * tj
         } else {
-          // Partial — use mean of valid neighbours
-          val = valid.reduce((a, b) => a + b, 0) / valid.length
+          floatBuf[idx] = valid.reduce((a, b) => a + b, 0) / valid.length
         }
-
-        const [r, g, b, a] = sampleColormap(val, vmin, vmax, palette)
-        pixels[pixelIdx]     = r
-        pixels[pixelIdx + 1] = g
-        pixels[pixelIdx + 2] = b
-        pixels[pixelIdx + 3] = Math.round(a * 0.85)
       }
     }
 
-    // Draw raw data to an intermediate canvas, then composite with blur
-    // onto the final canvas to smooth sharp ocean fronts / data boundaries.
-    const rawCanvas = document.createElement('canvas')
-    rawCanvas.width = CANVAS_W
-    rawCanvas.height = CANVAS_H
-    const rawCtx = rawCanvas.getContext('2d')!
-    rawCtx.putImageData(imgData, 0, 0)
+    // ── Step 2: Heavy box-blur on float buffer (salinity only) ──
+    // Blur at 512×384 resolution is FAR more effective than the old 31×46 grid smooth.
+    // radius=20 across 4 passes spreads the AS/BoB front over ~160 pixels.
+    const blurRadius = this.variable === 'salinity' ? 20 : 0
+    const blurPasses = this.variable === 'salinity' ? 4 : 0
 
-    // Apply blur on final canvas using CSS filter (works with drawImage)
-    ctx.filter = 'blur(12px)'
-    ctx.drawImage(rawCanvas, 0, 0)
-    ctx.filter = 'none'
+    let src = floatBuf
+    for (let pass = 0; pass < blurPasses; pass++) {
+      const dst = new Float32Array(CANVAS_W * CANVAS_H)
+      // Horizontal pass
+      for (let y = 0; y < CANVAS_H; y++) {
+        let sum = 0, count = 0
+        // seed the window
+        for (let x = 0; x <= blurRadius && x < CANVAS_W; x++) {
+          const i = y * CANVAS_W + x
+          if (maskBuf[i]) { sum += src[i]; count++ }
+        }
+        for (let x = 0; x < CANVAS_W; x++) {
+          const i = y * CANVAS_W + x
+          if (maskBuf[i] && count > 0) {
+            dst[i] = sum / count
+          } else {
+            dst[i] = src[i]
+          }
+          // slide window right
+          const addX = x + blurRadius + 1
+          if (addX < CANVAS_W) {
+            const ai = y * CANVAS_W + addX
+            if (maskBuf[ai]) { sum += src[ai]; count++ }
+          }
+          const remX = x - blurRadius
+          if (remX >= 0) {
+            const ri = y * CANVAS_W + remX
+            if (maskBuf[ri]) { sum -= src[ri]; count-- }
+          }
+        }
+      }
+      // Vertical pass
+      const dst2 = new Float32Array(CANVAS_W * CANVAS_H)
+      for (let x = 0; x < CANVAS_W; x++) {
+        let sum = 0, count = 0
+        for (let y = 0; y <= blurRadius && y < CANVAS_H; y++) {
+          const i = y * CANVAS_W + x
+          if (maskBuf[i]) { sum += dst[i]; count++ }
+        }
+        for (let y = 0; y < CANVAS_H; y++) {
+          const i = y * CANVAS_W + x
+          if (maskBuf[i] && count > 0) {
+            dst2[i] = sum / count
+          } else {
+            dst2[i] = dst[i]
+          }
+          const addY = y + blurRadius + 1
+          if (addY < CANVAS_H) {
+            const ai = addY * CANVAS_W + x
+            if (maskBuf[ai]) { sum += dst[ai]; count++ }
+          }
+          const remY = y - blurRadius
+          if (remY >= 0) {
+            const ri = remY * CANVAS_W + x
+            if (maskBuf[ri]) { sum -= dst[ri]; count-- }
+          }
+        }
+      }
+      src = dst2
+    }
+
+    // ── Step 3: Colormap the smoothed float buffer ──
+    const imgData = ctx.createImageData(CANVAS_W, CANVAS_H)
+    const pixels = imgData.data
+    for (let i = 0; i < CANVAS_W * CANVAS_H; i++) {
+      const pixelIdx = i * 4
+      if (!maskBuf[i]) {
+        pixels[pixelIdx + 3] = 0
+        continue
+      }
+      const [r, g, b, a] = sampleColormap(src[i], vmin, vmax, palette)
+      pixels[pixelIdx]     = r
+      pixels[pixelIdx + 1] = g
+      pixels[pixelIdx + 2] = b
+      pixels[pixelIdx + 3] = Math.round(a * 0.85)
+    }
+    ctx.putImageData(imgData, 0, 0)
 
     // Dispose old primitive
     if (this.primitive && !this.viewer.scene.isDestroyed()) {
