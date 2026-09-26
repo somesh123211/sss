@@ -1188,6 +1188,7 @@ export default function OceanCubeScene({
   const [probe, setProbe] = useState<Probe | null>(null)
   const [walkPos, setWalkPos] = useState<{ lat: number; lon: number; depth_m: number; physics: DepthPhysics } | null>(null)
   const [pinnedPoint, setPinnedPoint] = useState<{ lat: number; lon: number; depth_m: number; physics: DepthPhysics; title?: string } | null>(null)
+  const [showTelemetry, setShowTelemetry] = useState(false)
   const selectedPointRef = useRef<{ lat: number; lon: number; depth_m?: number } | null>(null)
 
   const displayFloats = filteredFloats ?? floats
@@ -2335,24 +2336,49 @@ export default function OceanCubeScene({
         </div>
       )}
 
+      {/* Telemetry Toggle Button */}
+      <button
+        onClick={() => setShowTelemetry(!showTelemetry)}
+        style={{
+          position: 'absolute',
+          bottom: 50,
+          left: 14,
+          zIndex: 30,
+          padding: '4px 10px',
+          borderRadius: 6,
+          border: '1px solid rgba(0,212,255,0.4)',
+          background: showTelemetry ? 'rgba(0,212,255,0.2)' : 'rgba(4,10,24,0.8)',
+          color: showTelemetry ? '#00e5ff' : '#8ba7bb',
+          fontSize: 9,
+          fontWeight: 700,
+          cursor: 'pointer',
+          fontFamily: 'Inter, sans-serif',
+          textTransform: 'uppercase',
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        {showTelemetry ? '📡 Telemetry ON' : '📡 Telemetry OFF'}
+      </button>
+
       {/* Interactive Multi-Factor Depth Telemetry Probe HUD */}
-      {probe && !walkMode && (
+      {showTelemetry && probe && !walkMode && (
         <div
           style={{
             position: 'fixed',
-            left: Math.min(probe.screenX + 16, window.innerWidth - 320),
-            top: Math.max(10, Math.min(probe.screenY - 10, window.innerHeight - 380)),
+            left: Math.min(probe.screenX + 16, window.innerWidth - 260),
+            top: Math.max(10, Math.min(probe.screenY - 10, window.innerHeight - 280)),
             zIndex: 40,
             pointerEvents: 'none',
-            background: 'rgba(4, 10, 24, 0.96)',
-            border: '1px solid rgba(0, 212, 255, 0.45)',
-            borderRadius: 8,
-            padding: '10px 14px',
+            background: 'rgba(4, 10, 24, 0.94)',
+            border: '1px solid rgba(0, 212, 255, 0.35)',
+            borderRadius: 6,
+            padding: '6px 10px',
             backdropFilter: 'blur(10px)',
-            fontSize: 11,
+            fontSize: 9.5,
             fontFamily: "'JetBrains Mono', 'Courier New', monospace",
-            minWidth: 280,
-            boxShadow: '0 6px 25px rgba(0,0,0,0.7)',
+            minWidth: 200,
+            maxWidth: 240,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
           }}
         >
           <div style={{ color: '#00e5ff', fontWeight: 700, marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
@@ -2430,7 +2456,7 @@ export default function OceanCubeScene({
       )}
 
       {/* Clicked / Pinned Ocean Data Point Telemetry Card */}
-      {pinnedPoint && !walkMode && !probe && (
+      {showTelemetry && pinnedPoint && !walkMode && !probe && (
         <div
           style={{
             position: 'absolute',
