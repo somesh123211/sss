@@ -2341,7 +2341,7 @@ export default function OceanCubeScene({
         onClick={() => setShowTelemetry(!showTelemetry)}
         style={{
           position: 'absolute',
-          bottom: 50,
+          bottom: 12,
           left: 14,
           zIndex: 30,
           padding: '4px 10px',
