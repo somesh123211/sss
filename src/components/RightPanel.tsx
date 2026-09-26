@@ -94,33 +94,7 @@ export default function RightPanel({
               <div>
                 <ProfileChart profile={profile} comparison={comparison} />
                 {profile.data && profile.data.pres && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#8ba7bb', marginBottom: 6, textTransform: 'uppercase' }}>
-                      Profile Levels ({profile.data.pres.length} depth levels)
-                    </div>
-                    <div style={{ maxHeight: 180, overflowY: 'auto', border: '1px solid rgba(0,212,255,0.15)', borderRadius: 6 }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9.5, fontFamily: 'monospace' }}>
-                        <thead>
-                          <tr style={{ background: 'rgba(0,212,255,0.1)', color: '#00d4ff', textAlign: 'left' }}>
-                            <th style={{ padding: '4px 6px' }}>Depth (dbar)</th>
-                            <th style={{ padding: '4px 6px' }}>Temp (°C)</th>
-                            <th style={{ padding: '4px 6px' }}>Salinity (PSU)</th>
-                            <th style={{ padding: '4px 6px' }}>QC</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {profile.data.pres.slice(0, 50).map((p, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', color: '#cde8f5' }}>
-                              <td style={{ padding: '3px 6px' }}>{Math.round(p)}</td>
-                              <td style={{ padding: '3px 6px', color: '#ff8a80' }}>{profile.data.temp[i]?.toFixed(2)}</td>
-                              <td style={{ padding: '3px 6px', color: '#80d8ff' }}>{profile.data.psal[i]?.toFixed(2)}</td>
-                              <td style={{ padding: '3px 6px', color: '#00e676' }}>{profile.data.qc_flag[i] || '1'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  <ProfileLevelsTable profile={profile} />
                 )}
               </div>
             )}
@@ -736,6 +710,70 @@ function PointFactorDetails({ selectedObject }: { selectedObject: any }) {
       <div style={{ padding: '0 12px 10px', fontSize: 9, color: '#475569' }}>
         Source: {meta.source ?? selectedObject.source ?? 'INCOIS IGORA / HYCOM'}
       </div>
+    </div>
+  )
+}
+
+/* ── Profile Levels Table — collapsible with toggle button ───────────────── */
+function ProfileLevelsTable({ profile }: { profile: ArgoProfile }) {
+  const [show, setShow] = useState(false)
+
+  return (
+    <div style={{ marginTop: 10 }}>
+      <button
+        onClick={() => setShow(!show)}
+        style={{
+          width: '100%',
+          padding: '5px 10px',
+          borderRadius: 6,
+          border: '1px solid rgba(0,212,255,0.25)',
+          background: show ? 'rgba(0,212,255,0.15)' : 'rgba(2,6,16,0.5)',
+          color: '#00e5ff',
+          fontSize: 9.5,
+          fontWeight: 700,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontFamily: 'Inter, sans-serif',
+          textTransform: 'uppercase',
+          transition: 'all 0.2s ease',
+        }}
+      >
+        <span>{show ? '▼' : '▶'} Profile Levels ({profile.data.pres.length} depths)</span>
+        <span style={{ fontSize: 8, color: '#8ba7bb' }}>{show ? 'HIDE' : 'SHOW'}</span>
+      </button>
+
+      {show && (
+        <div style={{
+          maxHeight: 120,
+          overflowY: 'auto',
+          border: '1px solid rgba(0,212,255,0.15)',
+          borderTop: 'none',
+          borderRadius: '0 0 6px 6px',
+        }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 9, fontFamily: 'monospace' }}>
+            <thead>
+              <tr style={{ background: 'rgba(0,212,255,0.1)', color: '#00d4ff', textAlign: 'left', position: 'sticky', top: 0 }}>
+                <th style={{ padding: '3px 5px' }}>Depth</th>
+                <th style={{ padding: '3px 5px' }}>Temp °C</th>
+                <th style={{ padding: '3px 5px' }}>Sal PSU</th>
+                <th style={{ padding: '3px 5px' }}>QC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {profile.data.pres.slice(0, 30).map((p, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', color: '#cde8f5' }}>
+                  <td style={{ padding: '2px 5px' }}>{Math.round(p)}</td>
+                  <td style={{ padding: '2px 5px', color: '#ff8a80' }}>{profile.data.temp[i]?.toFixed(2)}</td>
+                  <td style={{ padding: '2px 5px', color: '#80d8ff' }}>{profile.data.psal[i]?.toFixed(2)}</td>
+                  <td style={{ padding: '2px 5px', color: '#00e676' }}>{profile.data.qc_flag[i] || '1'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
